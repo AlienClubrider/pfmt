@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Narrate blog posts with Kokoro-82M and encode them for the web and the podcast feed.
+
+  content/narration/<slug>.txt  ->  public/audio/<slug>.opus  (Opus 32 kbps mono, web player)
+                                    public/audio/<slug>.m4a   (AAC-LC 48 kbps mono, fallback + podcast)
+                                    src/data/audio.json       (seconds, bytes, hash per slug)
+
+Narration text: '# ' lines are headings (longer pause after), blank lines split paragraphs.
+A post is skipped when its text, voice and encode settings hash the same as last time
+and both files still exist. Use --force to redo everything.
+
+usage: scripts/narrate [--force] [--dry-run] [--voice am_michael] [slug ...]
+Needs ffmpeg (libopus + aac) and a Python with kokoro, soundfile and numpy.
+If this Python lacks kokoro it re-runs itself with $PFMT_TTS_PYTHON
+(default ~/.local/share/pfmt-tts/.venv/bin/python).
+"""
+import os, sys
+
+# No telemetry from Hugging Face or anything else that honours these.
+os.environ.setdefault('HF_HUB_DISABLE_TELEMETRY', '1')
+os.environ.setdefault('DO_NOT_TRACK', '1')
+
+try:
+    import kokoro  # noqa: F401
+except ImportError:
+    py = os.environ.get('PFMT_TTS_PYTHON', os.path.expanduser('~/.local/share/pfmt-tts/.venv/bin/python'))
+    if os.environ.get('PFMT_NARRATE_REEXEC') or not os.path.exists(py):
+        sys.exit(f'narrate: kokoro is not installed for {sys.executable}; set PFMT_TTS_PYTHON')
+    os.environ['PFMT_NARRATE_REEXEC'] = '1'
+    os.execv(py, [py, os.path.abspath(__file__), *sys.argv[1:]])
+
+import argparse, hashlib, json, subprocess, tempfile, warnings
+from pathlib import Path
+
+warnings.filterwarnings('ignore', category=UserWarning)  # torch/kokoro deprecation noise
+warnings.filterwarnings('ignore', category=FutureWarning)
+
+ROOT = Path(__file__).resolve().parent.parent
+NARRATION = ROOT / 'content' / 'narration'
+AUDIO = ROOT / 'public' / 'audio'
+MANIFEST = ROOT / 'src' / 'data' / 'audio.json'
+
+SR = 24000                   # Kokoro's output rate
+VOICE = 'am_michael'         # the voice Bryson heard and liked in the mockups
+SPEED = 1.0
+GAP_HEADING, GAP_PARAGRAPH = 0.9, 0.55
+OPUS = ['-c:a', 'libopus', '-b:a', '32k', '-application', 'audio']
+AAC = ['-c:a', 'aac', '-b:a', '48k', '-movflags', '+faststart']
+# Bump when the way text becomes audio changes, so every post re-renders.
+RENDER_VERSION = 1
+
+
+def render_key(text: str, voice: str) -> str:
+    recipe = json.dumps([RENDER_VERSION, voice, SPEED, GAP_HEADING, GAP_PARAGRAPH, OPUS, AAC])
+    return hashlib.sha256((recipe + '\n' + text).encode()).hexdigest()[:16]
+
+
+def lines_of(text: str):
+    """Yield (line, is_heading) for every non-empty line, in reading order."""
+    for line in text.splitlines():
+        line = line.strip()
+        if line:
+            yield (line[2:].strip(), True) if line.startswith('# ') else (line, False)
+
+
+def synthesize(text: str, voice: str, wav_path: Path) -> None:
+    import numpy as np, soundfile as sf
+    from kokoro import KPipeline
+    pipe = KPipeline(lang_code=voice[0], repo_id='hexgrad/Kokoro-82M')  # 'a' US, 'b' UK
+    silence = lambda s: np.zeros(int(SR * s), dtype=np.float32)
+    with sf.SoundFile(wav_path, 'w', SR, 1, 'PCM_16') as wav:  # streamed: long chapters stay small in memory
+        for line, heading in lines_of(text):
+            for _, _, audio in pipe(line, voice=voice, speed=SPEED):
+                wav.write(audio.numpy() if hasattr(audio, 'numpy') else audio)
+            wav.write(silence(GAP_HEADING if heading else GAP_PARAGRAPH))
+
+
+def encode(wav: Path, out: Path, codec: list) -> None:
+    tmp = out.with_suffix(out.suffix + '.part')
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(wav), '-ac', '1', *codec,
+                    '-map_metadata', '-1', '-f', 'ogg' if out.suffix == '.opus' else 'mp4', str(tmp)], check=True)
+    tmp.replace(out)
+
+
+def seconds_of(path: Path) -> float:
+    out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                          '-of', 'default=nw=1:nk=1', str(path)], check=True, capture_output=True, text=True)
+    return round(float(out.stdout.strip()), 1)
+
+
+def mb(n: int) -> str:
+    return f'{n / 1e6:.1f} MB'
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description='Narrate content/narration/*.txt into public/audio.')
+    ap.add_argument('slugs', nargs='*', help='only these posts (default: all)')
+    ap.add_argument('--voice', default=VOICE)
+    ap.add_argument('--force', action='store_true', help='re-render even if unchanged')
+    ap.add_argument('--dry-run', action='store_true', help='say what would be rendered, render nothing')
+    args = ap.parse_args()
+
+    manifest = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
+    sources = sorted(NARRATION.glob('*.txt'))
+    if args.slugs:
+        wanted = set(args.slugs)
+        sources = [p for p in sources if p.stem in wanted]
+        missing = wanted - {p.stem for p in sources}
+        if missing:
+            sys.exit(f'narrate: no narration for {", ".join(sorted(missing))}')
+    AUDIO.mkdir(parents=True, exist_ok=True)
+
+    for src in sources:
+        slug, text = src.stem, src.read_text(encoding='utf-8')
+        key = render_key(text, args.voice)
+        opus, m4a = AUDIO / f'{slug}.opus', AUDIO / f'{slug}.m4a'
+        old = manifest.get(slug, {})
+        if not args.force and old.get('hash') == key and opus.exists() and m4a.exists():
+            print(f'= {slug} unchanged')
+            continue
+        print(f'+ {slug} rendering ({len(text.split())} words, {args.voice})', flush=True)
+        if args.dry_run:
+            continue
+        with tempfile.TemporaryDirectory(prefix='narrate-') as tmp:
+            wav = Path(tmp) / f'{slug}.wav'
+            synthesize(text, args.voice, wav)
+            encode(wav, opus, OPUS)
+            encode(wav, m4a, AAC)
+        manifest[slug] = {
+            'src': f'audio/{slug}.opus', 'fallback': f'audio/{slug}.m4a',
+            'seconds': seconds_of(m4a), 'bytes': opus.stat().st_size,
+            'fallbackBytes': m4a.stat().st_size, 'voice': args.voice, 'hash': key,
+        }
+        print(f'  {slug}: {manifest[slug]["seconds"]:.0f}s, opus {mb(opus.stat().st_size)}, m4a {mb(m4a.stat().st_size)}', flush=True)
+        MANIFEST.parent.mkdir(parents=True, exist_ok=True)  # saved after each post so a crash keeps finished work
+        MANIFEST.write_text(json.dumps(dict(sorted(manifest.items())), indent=2) + '\n')
+
+    # Narration removed? Drop its entry; leave the files for a human to delete.
+    for slug in sorted(set(manifest) - {p.stem for p in NARRATION.glob('*.txt')}):
+        print(f'- {slug} has no narration any more; dropped from {MANIFEST.relative_to(ROOT)}')
+        manifest.pop(slug)
+    if not args.dry_run and manifest:
+        MANIFEST.parent.mkdir(parents=True, exist_ok=True)
+        MANIFEST.write_text(json.dumps(dict(sorted(manifest.items())), indent=2) + '\n')
+
+    total = sum(p.stat().st_size for p in AUDIO.glob('*') if p.suffix in ('.opus', '.m4a'))
+    hours = sum(e['seconds'] for e in manifest.values()) / 3600
+    print(f'audio total: {mb(total)} for {hours:.1f} h across {len(manifest)} posts '
+          f'(GitHub Pages: 1 GB site, 100 MB per file)')
+    big = [p.name for p in AUDIO.glob('*') if p.stat().st_size > 100e6]
+    if big:
+        print(f'WARNING: over 100 MB, GitHub will refuse: {", ".join(big)}')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
