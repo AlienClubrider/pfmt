@@ -1,0 +1,179 @@
+Pitfalls, and how to spot them. Part 5 of 8 of Threads, Futures and Queues.
+
+Chapter 4 showed how a CompletableFuture chain is meant to work. This chapter covers the six ways it usually goes wrong in a real service. Each one looks fine in code review and fine on your laptop. They show up only under load.
+
+In the kitchen, on a bad night:
+
+A cook stands at the oven waiting for bread instead of cooking. Blocking inside the pool.
+
+The ticket rail has no end, so tickets pile up out the door. Unbounded queue.
+
+A dish is dropped and nobody tells the waiter. Lost exception.
+
+Two cooks each wait for the other to finish a sauce. Starvation and deadlock.
+
+A ticket is passed on without the table number. Lost context.
+
+A cook waits for a supplier who never shows up. No timeout.
+
+# 1. Blocking inside the pool
+
+You met this trap in Chapter 4. Here is what it does to a busy service.
+
+When you call supplyAsync(() -> ...) with no second argument, the task runs on the common ForkJoinPool. The whole JVM shares that one pool: parallel streams, some libraries, and every other supplyAsync without an executor.
+
+Its size is the number of CPU cores minus one. On an 8-core pod that is just 7 threads. It was built for short bursts of CPU work.
+
+Put a slow HTTP call in it and the thread just stands there waiting. Seven slow calls and the pool is full of waiting threads. Everything else that uses it now waits in line.
+
+The code here calls a slow pricing service with supplyAsync and no executor, so it blocks a common pool thread for about 300 milliseconds.
+
+Figure: The common pool's seven workers all block on HTTP calls, and new tasks pile up in its queue.
+
+The fix is to give blocking work its own pool, sized for waiting, and to pass it in every time:
+
+The code here defines a dedicated pricing pool: threads named pricing, 32 of them, with a queue of 200.
+
+1. A clear name shows up in logs and thread dumps, so you can tell who owns a stuck thread.
+
+2. A bounded queue. The next section explains why.
+
+The same pricing call, now passing the pricing executor explicitly.
+
+Now a slow pricing service can fill only the pricing- threads. The rest of the app keeps going. Chapter 6 shows the other way out: virtual threads, where waiting is cheap.
+
+# 2. Unbounded pools and queues
+
+Unbounded means "no limit". There are two kinds, and both hurt.
+
+Unbounded threads. Executors.newCachedThreadPool() makes a new thread whenever none is free. In a traffic spike you get thousands of platform threads. Each one reserves stack memory, and the CPU spends its time switching between them.
+
+Unbounded queue. Executors.newFixedThreadPool(n) has a fixed number of threads but a queue with no end. Work is never refused. It just waits longer and longer, and every waiting task holds memory.
+
+Spring Boot's default executor (the one behind @Async when virtual threads are off) starts 8 core threads. Unless you set queue-capacity, its queue is unbounded.
+
+That has a sneaky side effect. A ThreadPoolTaskExecutor only adds threads beyond its core size when the queue is full. An endless queue is never full, so max-size never kicks in.
+
+Figure: Top: eight busy threads and a queue that keeps growing. Bottom: a bounded queue that is full, so the caller runs the new task itself.
+
+Give the default executor real limits in application.yml:
+
+The settings here size Spring Boot's default task pool at 16 core threads, 32 at most, with a queue of 500.
+
+With a bounded queue, something must happen when it is full. That is the rejection policy. The default throws a TaskRejectedException, which is the "Sorry, we're full" from Chapter 2.
+
+A gentler choice is CallerRunsPolicy: the thread that tried to submit the task runs it itself. That slows the caller down, which is exactly the backpressure you want.
+
+The code here sets the caller-runs rejection policy on the pool.
+
+# 3. Lost exceptions
+
+A CompletableFuture keeps its exception inside itself. Nothing is thrown or logged unless someone calls join() or get(), or adds a handler like exceptionally or whenComplete.
+
+So a "fire and forget" task can fail every time, and the logs stay clean.
+
+Failure vanishes.
+
+The code here fires off an audit record with runAsync and never looks at the result.
+
+Failure is logged.
+
+The same audit call with a whenComplete handler that logs the error if it fails.
+
+@Async methods have the same trap. If the method returns void, an exception goes to Spring's AsyncUncaughtExceptionHandler, which by default only logs it. If it returns a CompletableFuture, the exception sits inside that future until someone looks.
+
+# 4. Starvation and deadlock
+
+Starvation means a task is ready to run but never gets a thread. Deadlock is the worst case: tasks wait for each other in a circle, and nothing ever moves.
+
+The classic way to get there: a task running in a pool submits a child task to the same pool, then waits for it with join(). If every thread does that at once, every thread waits for a child stuck in the queue behind it.
+
+The code here starts a report task on a pool and, inside it, joins on a second task from the same pool.
+
+Figure: A pool of two threads: both parents wait for children that are stuck in the queue, so nothing runs.
+
+Fixes, best first:
+
+Don't block inside a stage. Chain with thenCompose instead of calling join() inside the lambda.
+
+Use separate pools for the outer and the inner work.
+
+Use virtual threads, where waiting doesn't hold a scarce pool thread (Chapter 6).
+
+The fixed version chains the header and lines loads with thenCompose, so no pool thread sits waiting on another.
+
+# 5. Lost MDC and security context
+
+Spring keeps some per-request data in a ThreadLocal: a variable that belongs to one thread. You rely on two of them every day:
+
+The logging MDC, which puts the trace id on every log line.
+
+The SecurityContext, which knows who the current user is.
+
+When your code hops to another thread, those values stay behind. Log lines from the async task have no trace id, and SecurityContextHolder.getContext() comes back empty.
+
+Figure: Without a task decorator the pool thread has no trace id or user. With one, the values are copied across.
+
+The fix is a TaskDecorator: a small wrapper that Spring runs around every task the executor accepts. It copies the values over before the task and cleans up after.
+
+Spring Framework 6.1+ ships ContextPropagatingTaskDecorator. It uses the Micrometer context-propagation library (add io.micrometer:context-propagation), so tracing context and MDC follow the task:
+
+The code here registers a task decorator bean that carries the request context over to pool threads.
+
+On Spring Boot 4.1 and later you can skip the bean and set one property instead:
+
+The setting here turns on context propagation for Spring's task execution.
+
+Spring Boot applies TaskDecorator beans to the executor it auto-configures.
+
+For your own pools, call ex.setTaskDecorator(...) on each ThreadPoolTaskExecutor.
+
+For the logged-in user, Spring Security has DelegatingSecurityContextAsyncTaskExecutor, which wraps an executor and carries the SecurityContext across.
+
+A decorator only helps tasks that go through that executor. A supplyAsync with no executor lands on the common pool and gets nothing. One more reason to always pass the executor.
+
+# 6. No timeouts
+
+join() and get() with no arguments wait forever. If a downstream service hangs, your request thread hangs with it.
+
+Hang enough of them and Tomcat's 200 request threads are used up. Then the whole service stops answering, even requests that never touch the slow service.
+
+The code here gives the pricing call an 800 millisecond limit, falling back to an unknown price with completeOnTimeout, or failing instead with orTimeout.
+
+1. After 800 milliseconds the future completes with a fallback value.
+
+2. After 800 milliseconds the future fails with a TimeoutException.
+
+Put timeouts in two places. On the future, so the caller stops waiting. And on the client (HTTP connect and read timeouts, a JDBC query timeout), so the thread doing the work also lets go.
+
+Watch out: orTimeout and completeOnTimeout finish the future. They don't stop the work. The pool thread stays inside pricingClient.fetch until that call returns.
+
+cancel(true) on a CompletableFuture doesn't interrupt the thread either. Only a timeout on the client itself frees that thread.
+
+# A code review checklist
+
+When you read async code at work, ask these six questions:
+
+1. Does every supplyAsync or runAsync pass an executor?
+
+2. Does every pool limit both its threads and its queue?
+
+3. Does every future end in a join, a handler, or a log line?
+
+4. Does any task wait on another task in the same pool?
+
+5. Does the executor carry MDC and the security context?
+
+6. Does every remote call have a timeout?
+
+Why it matters: At thousands of requests per second, a pitfall doesn't fail one request. It fails all of them together.
+
+One slow dependency, one shared pool and no timeout add up to a full outage. Separate bounded pools and a timeout on every remote call turn "everything is down" into "one feature is slow".
+
+Recap:
+
+1. Never block on the common pool. Give blocking work its own bounded pool and always pass it in.
+
+2. Every future needs an ending (a join, a handler or a log) and every remote call needs a timeout.
+
+3. Context doesn't follow you to another thread by itself, and a pool must never wait on itself.

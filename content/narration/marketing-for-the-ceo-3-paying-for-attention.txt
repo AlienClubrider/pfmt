@@ -1,0 +1,159 @@
+Paying for attention. Part 3 of 4 of Marketing for the CEO.
+
+Ads are the fast lane: you pay, and people see your app today instead of in six months. This chapter covers where ads run, how a campaign works, and the one bit of maths that tells you whether an ad is making money or burning it.
+
+# What an ad really buys
+
+Free channels (Chapter 2) are slow: months before search and the app stores send real traffic. An ad skips the wait. You pay a platform (Facebook, Google, Apple, TikTok) to put your message in front of people now.
+
+What you buy is attention, not customers. The platform promises that people will see your ad. Whether they tap, try the app and stay is still up to your ad, your page and your app.
+
+In the shop: Back to our small shop. Ads are the flyers and billboards. Three kinds matter:
+
+Search ads are like paying to be the first name on the mall directory when someone asks "where can I buy board games?" They were already looking.
+
+Social ads are flyers handed to people walking past. They weren't looking for you, so the flyer has to stop them.
+
+Retargeting is a reminder flyer to people who peeked in the window and walked on.
+
+Flyers stop working the day you stop paying. Your sign, your busy street and your regulars keep working for free.
+
+# Where you can buy ads
+
+There are many ad platforms, but for an app like RuleBuddy, five matter. The big difference between them is mindset: is the person searching for something like you, or scrolling for fun?
+
+Searching people are called high intent. They're easier to win but cost more per tap. Scrolling people are low intent. They're cheaper to reach, but your ad has to interrupt them.
+
+The table compares ad platforms: Meta for scrolling feeds, Google Search and Apple Ads for people already looking, TikTok for videos that feel native, and Reddit for reaching board game communities directly.
+
+As of 2026: Apple renamed Apple Search Ads to Apple Ads in 2025. One Meta Ads Manager runs ads across Facebook, Instagram, Messenger and its Audience Network of partner apps. Meta now runs much of its targeting automatically (it calls this Advantage+): you set a goal, a budget and a few ads, and its system picks who sees them. Google has a similar automatic option for apps, called App campaigns, which spreads one budget across Search, Google Play and YouTube. For websites, its all-in-one version is Performance Max. With targeting and placement automated, the levers left to you are mainly the creative and the budget. These products change often; the ads manager checks current options before each campaign.
+
+# How a campaign works: four dials
+
+A campaign is one ad push with one goal, such as "get sign-ups for RuleBuddy". Whatever the platform, you set four dials:
+
+1. Audience: who can see it. Country, age, interests, or "people like my users". On Meta in 2026 it is often left broad on purpose.
+
+2. Creative: the ad itself, meaning the picture or video plus the words. The industry calls this the creative. It matters most today: the platform learns who to show it to from how people react.
+
+3. Budget: how much per day or in total.
+
+4. Bid and goal: what you are paying for, such as views, clicks or sign-ups. Most people let the platform bid for them ("automatic bidding") and just pick the goal.
+
+Every time someone opens Instagram or searches Google, the ads that could show there compete in a split-second auction. The winner isn't simply the highest bidder. Platforms also score how likely people are to engage with the ad, so a good ad can beat a bigger budget.
+
+Figure: Four dials, audience, creative, budget, and bid and goal, feed a split-second auction, which decides whether your ad is shown to a person.
+
+Tell the team: "Make five different creatives for one audience, and tell me which one wins."
+
+# Retargeting: the reminder flyer
+
+Retargeting (also called remarketing) means showing ads only to people who already visited your website or installed your app but didn't take the next step. They know you, so they're often the cheapest people to win back.
+
+It needs two things. First, a tracking tag on your site or app so the platform knows who visited. On Meta this is the pixel plus its server-side partner, the Conversions API. Second, enough visitors to make an audience worth showing ads to. With a few dozen visitors a month, it isn't worth setting up yet.
+
+Keep it polite: cap how often one person sees it, and stop after a couple of weeks. Ten sightings of the same ad feels creepy.
+
+Tell the team: "Install tracking now, and start retargeting once we have enough visitors."
+
+# The money math
+
+This is the part to remember. An ad turns dollars into users, and it's only worth running if the users are worth more than they cost. Three numbers tell you that.
+
+CAC (customer acquisition cost): what you spent to get one customer. Ad spend ÷ new customers. Decide up front whether "customer" means a sign-up or a paying user. Paying is the one that matters.
+
+LTV (lifetime value): how much money one customer brings in before they leave. For a subscription, that is roughly price per month times months they stay, minus the app store's cut. For small developers like us, the store cut is usually 15% (as of 2026).
+
+Payback: how many months of a customer's payments it takes to earn back their CAC. Shorter is safer, because the money comes back to spend again.
+
+The ads dashboard shows smaller numbers that tell you where people drop off:
+
+The table explains the ad numbers: impressions, cost per thousand impressions, click-through rate, cost per click or install, and conversion rate.
+
+Step through what $100 might buy. Every number here is made up to show the shape, not RuleBuddy's real results.
+
+Figure: Hypothetical funnel for 100 dollars of ads: 20,000 people see it, 200 tap, 20 install, 2 pay, so the cost per paying user is 50 dollars.
+
+Now compare that $50 with what a customer is worth. Say RuleBuddy charged $3 a month and the average payer stayed 6 months. That's $18, minus a 15% store cut: about $15 LTV. Paying $50 to earn $15 loses $35 per customer. More budget would lose more money, faster.
+
+Figure: Two hypothetical cases. Losing: a customer costs 50 dollars and is worth 15. Healthy: a customer costs 14 dollars and is worth 42, three times the cost.
+
+Why it matters: You can fix a losing ad from either side. Lower the cost: a better creative gets more taps, and a clearer store page gets more installs. Or raise the worth: better onboarding keeps people longer, and better pricing earns more per person. Ads multiply whatever your funnel already does. A leaky funnel with more ad money just leaks faster.
+
+Tell the team: "Before we spend, show me our CAC, LTV and payback, even as rough estimates."
+
+# Test small before you spend big
+
+Nobody knows ahead of time which ad will work, not even pros. So run cheap experiments and let the numbers pick. A typical first test:
+
+1. One goal. Pick the action you want, for example sign-ups. Check that tracking actually counts it before spending a dollar.
+
+2. One platform. Pick the one whose mindset fits (the table above).
+
+3. 3 to 5 creatives. Same audience, different hooks. A hook is the first line or first second that makes someone stop scrolling. AI tools now make it cheap to produce many variations, so the limit is good ideas, not production time. For example: "Stop arguing about the rules", "Learn any board game in 2 minutes", or a clip of a real game night.
+
+4. A small budget you're fine losing. For example $10 to $20 a day for a week (hypothetical). Don't touch it for the week.
+
+5. Read, cut, repeat. Compare cost per sign-up by creative. Stop the losers, test new ideas against the winner.
+
+6. Scale slowly. Only when CAC is comfortably below LTV, and in small steps. A common habit is about 20% more budget at a time, so the system doesn't reset.
+
+Watch out:
+
+The learning phase. New campaigns perform unevenly at first while the platform figures out who responds. Meta's own guidance has long been about 50 results in a week before its system settles. Editing the campaign every day restarts that learning.
+
+The wrong goal. If you ask for clicks, you get people who click, not people who sign up. Always optimise for the action closest to money that you can track.
+
+Fuzzy numbers on iPhone. Since Apple's privacy changes (App Tracking Transparency, 2021), many iPhone users can't be tracked across apps. So platforms estimate some results. Treat dashboard numbers as a good guess and check them against real sign-ups in your own app.
+
+# When ads are worth it, and when they aren't
+
+Worth trying when...
+
+People who find the app for free already stick around, and some pay.
+
+You know roughly what a customer is worth (LTV).
+
+Tracking works from ad tap to sign-up to payment.
+
+You have a clear one-line promise (Chapter 1) and an ad that shows it.
+
+The test budget is money you're fine losing to learn.
+
+Not yet when...
+
+Most new users leave in the first week. Fix the app first.
+
+You can't see what happens after the click.
+
+You're hoping ads will tell you who the app is for. That's positioning work, and it comes first.
+
+The app earns nothing and has no plan to.
+
+It's a family app. Those stay private: no marketing at all.
+
+A good order for our apps: free channels first, then a small ad test once free users show the app keeps people. Ads amplify what already works; they rarely create it.
+
+# About that RuleBuddy Facebook ad
+
+We don't have its numbers, so this isn't a verdict. These are the usual reasons a first Facebook ad underwhelms; most hit several:
+
+1. It was a "boost" or aimed at clicks. Boosting a post usually optimises for likes and engagement, so Meta found people who like things, not people who sign up.
+
+2. Small budget, short run. The system never got enough results to leave the learning phase, so it was still guessing when the ad stopped.
+
+3. One creative. With nothing to compare, there was no way to learn which message works.
+
+4. Interruption, not intent. Nobody on Facebook was looking for a rules helper right then. The ad had one second to show the problem.
+
+5. No tracking after the tap. Without the pixel or an app event, nobody could see whether anyone signed up, so the result felt like nothing.
+
+None of this means Facebook ads can't work for RuleBuddy, only that the next try should be a proper test. Tell the team: "Run a one-week Meta test for RuleBuddy, $X a day, 3 to 5 creatives, optimise for sign-ups, and confirm tracking works before launch."
+
+Recap:
+
+1. Ads buy attention, not customers. Search ads catch people already looking (high intent). Social ads interrupt people scrolling (low intent).
+
+2. A campaign is four dials: audience, creative, budget, and bid and goal. In 2026 the creative matters most, so test 3 to 5 small and let the numbers pick.
+
+3. Only scale when a customer is worth clearly more than they cost: LTV well above CAC (around 3 times ), with tracking you trust.

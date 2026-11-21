@@ -1,0 +1,225 @@
+---
+title: "Cheat sheet"
+date: 2026-11-20
+category: tech
+series:
+  id: threads-futures-queues
+  title: "Threads, Futures and Queues"
+part: 8
+partsTotal: 8
+tags: ["java", "concurrency", "spring-boot", "cheat-sheet"]
+readingMinutes: 7
+summary: "The whole book on a few screens. Keep this one open next to that confusing class at work: five steps to read it, a translation table, a \"which tool when\" guide, the numbers worth remembering, and a glossary."
+---
+<aside class="callout analogy">
+<p class="callout-title">In the kitchen</p>
+<p>A new cook walks into a busy kitchen. Before touching anything they ask five things. Where do tickets come in? Who cooks them? What happens to each dish? Where does it go out, and what if it's burnt? How many can we do at once?</p>
+<p>Reading async code is the same five questions.</p>
+</aside>
+
+## Read async code in five steps
+
+<figure class="fig" id="fig-8-1">
+<svg viewBox="0 0 400 330" role="img" aria-labelledby="fig-8-1-t">
+<title id="fig-8-1-t">Five steps: find where work leaves the thread, name the executor, read the chain, find the end and the failure path, count the limits.</title>
+<defs>
+<marker id="ah-8-1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" class="ah" />
+</marker>
+</defs>
+<rect x="10" y="10" width="380" height="52" rx="6" class="box" />
+<circle cx="36" cy="36" r="15" class="f-work" />
+<text x="36" y="41" class="t-on t-bold t-mid">1</text>
+<text x="62" y="31" class="t-bold">Where does work leave?</text>
+<text x="62" y="49" class="t-small t-muted">supplyAsync · @Async · submit · listeners</text>
+<rect x="10" y="74" width="380" height="52" rx="6" class="box" />
+<circle cx="36" cy="100" r="15" class="f-thread" />
+<text x="36" y="105" class="t-on t-bold t-mid">2</text>
+<text x="62" y="95" class="t-bold">Who runs it?</text>
+<text x="62" y="113" class="t-small t-muted">which executor · how many threads · queue size</text>
+<rect x="10" y="138" width="380" height="52" rx="6" class="box" />
+<circle cx="36" cy="164" r="15" class="f-work" />
+<text x="36" y="169" class="t-on t-bold t-mid">3</text>
+<text x="62" y="159" class="t-bold">Read the chain in plain words</text>
+<text x="62" y="177" class="t-small t-muted">then… then… when both… (table below)</text>
+<rect x="10" y="202" width="380" height="52" rx="6" class="box" />
+<circle cx="36" cy="228" r="15" class="f-bad" />
+<text x="36" y="233" class="t-on t-bold t-mid">4</text>
+<text x="62" y="223" class="t-bold">Where does it end? What if it fails?</text>
+<text x="62" y="241" class="t-small t-muted">join · return · nowhere? · timeout · handler</text>
+<rect x="10" y="266" width="380" height="52" rx="6" class="box" />
+<circle cx="36" cy="292" r="15" class="f-queue" />
+<text x="36" y="297" class="t-on t-bold t-mid">5</text>
+<text x="62" y="287" class="t-bold">Count the limits</text>
+<text x="62" y="305" class="t-small t-muted">pools · semaphores · DB pool · partitions</text>
+<path d="M36 52 V72" class="line" marker-end="url(#ah-8-1)" />
+<path d="M36 116 V136" class="line" marker-end="url(#ah-8-1)" />
+<path d="M36 180 V200" class="line" marker-end="url(#ah-8-1)" />
+<path d="M36 244 V264" class="line" marker-end="url(#ah-8-1)" />
+</svg>
+<figcaption><b>Figure 8.1</b> Five questions, in order. Write the answers down in a comment or a notebook as you go.</figcaption>
+</figure>
+
+<ol class="steps">
+<li><strong>Find where work leaves the current thread.</strong> Search the class for <code>supplyAsync</code>, <code>runAsync</code>, <code>@Async</code>, <code>.submit(</code>, <code>parallelStream</code>, <code>@KafkaListener</code>, <code>@RabbitListener</code>, <code>@SqsListener</code>. Everything else runs on the caller's thread.</li>
+<li><strong>Name the executor for each one.</strong> Is one passed in? Which bean is it, and how many threads and how big a queue does it have? No executor on <code>supplyAsync</code> means the common pool (cores&nbsp;−&nbsp;1 threads). <code>@Async</code> with no name means Spring Boot's <code>applicationTaskExecutor</code>.</li>
+<li><strong>Read each chain top to bottom</strong>, saying each method in plain words with the table below. Note any <code>…Async</code> stage, because that is another hop to another thread.</li>
+<li><strong>Find where it ends, and what happens when it fails.</strong> Is the future joined, returned to Spring (a controller can return a <code>CompletableFuture</code>), or dropped? Is there an <code>exceptionally</code>/<code>handle</code>, and a timeout? A dropped future with no handler is a silent failure (<a href="../threads-futures-queues-5-pitfalls/#3-lost-exceptions">Chapter 5</a>).</li>
+<li><strong>Count the limits along the path.</strong> Pool sizes, queue capacities, semaphores, listener concurrency, partitions, the DB connection pool. The smallest one is how many can really run at once.</li>
+</ol>
+
+## CompletableFuture in plain words
+
+Each method, what it means out loud, and how you would write the same thing with virtual threads ([Chapter 6](../threads-futures-queues-6-the-readable-way-virtual-threads/)).
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Method</th><th>Say it as</th><th>Plain-code version</th></tr>
+</thead>
+<tbody>
+<tr><td><code>supplyAsync(f, ex)</code></td><td>Start <code>f</code> on <code>ex</code>; give me a ticket for the result</td><td><code>exec.submit(f)</code></td></tr>
+<tr><td><code>thenApply(f)</code></td><td>…then change the result with <code>f</code></td><td><code>var y = f(x);</code></td></tr>
+<tr><td><code>thenCompose(f)</code></td><td>…then start another async step that needs the result</td><td><code>var y = callNext(x);</code></td></tr>
+<tr><td><code>thenCombine(b, f)</code></td><td>When this <em>and</em> <code>b</code> are done, merge them</td><td><code>f(a.get(), b.get())</code></td></tr>
+<tr><td><code>thenAccept(f)</code></td><td>…then use the result, return nothing</td><td><code>f(x);</code></td></tr>
+<tr><td><code>allOf(a, b, c)</code></td><td>Wait until all of them are done</td><td><code>a.get(); b.get(); c.get();</code></td></tr>
+<tr><td><code>anyOf(a, b)</code></td><td>Whichever finishes first</td><td><code>exec.invokeAny(tasks)</code></td></tr>
+<tr><td><code>exceptionally(f)</code></td><td>If it failed, use <code>f</code> to make a fallback</td><td><code>try \{ … \} catch (…) \{ fallback \}</code></td></tr>
+<tr><td><code>handle((r, ex) -&gt; …)</code></td><td>Either way, look at result <em>or</em> error and decide</td><td><code>try/catch</code> that returns in both</td></tr>
+<tr><td><code>whenComplete((r, ex) -&gt; …)</code></td><td>Either way, do a side effect (log); result unchanged</td><td><code>finally \{ log… \}</code></td></tr>
+<tr><td><code>orTimeout(t)</code></td><td>Fail if not done in <code>t</code></td><td><code>future.get(t, unit)</code></td></tr>
+<tr><td><code>completeOnTimeout(v, t)</code></td><td>Use <code>v</code> if not done in <code>t</code></td><td><code>get(t, unit)</code> + catch <code>TimeoutException</code></td></tr>
+<tr><td><code>join()</code> / <code>get()</code></td><td>Stop here and wait</td><td><code>future.get()</code></td></tr>
+<tr><td><code>…Async</code> versions</td><td>Same, but run the step on an executor (another hop)</td><td>Usually not needed</td></tr>
+</tbody>
+</table>
+</div>
+
+One rule from [Chapter 4](../threads-futures-queues-4-completablefuture-read-slowly/) worth repeating: a stage *without* `Async` runs on whichever thread finished the stage before it, or on the caller if that stage was already done. Don't put slow work there unless you know which thread that is.
+
+<aside class="callout watch">
+<p class="callout-title">Watch out</p>
+<p>Three red flags to spot in five seconds:</p>
+<ul>
+<li><code>supplyAsync(…)</code> with <strong>one</strong> argument doing I/O: it's on the common pool.</li>
+<li><code>.join()</code> <strong>inside</strong> a lambda that runs on a pool: a starvation or deadlock risk.</li>
+<li>A future that is never joined, returned or handled: failures disappear.</li>
+</ul>
+</aside>
+
+## Which tool when
+
+<figure class="fig" id="fig-8-2">
+<svg viewBox="0 0 400 372" role="img" aria-labelledby="fig-8-2-t">
+<title id="fig-8-2-t">Decision tree. CPU work: bounded pool near core count. Before Java 21: CompletableFuture with own pool. Already a future or reactive: keep it. Downstream limit: virtual threads with a semaphore. Otherwise: virtual threads with plain code.</title>
+<defs>
+<marker id="ah-8-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" class="ah" />
+</marker>
+</defs>
+<rect x="10" y="10" width="220" height="50" rx="6" class="box" />
+<text x="120" y="31" class="t-mid t-bold">Mostly waiting on</text>
+<text x="120" y="49" class="t-mid t-bold">I/O (HTTP, DB)?</text>
+<rect x="256" y="10" width="134" height="50" rx="6" class="s-thread" />
+<text x="323" y="31" class="t-mid">Bounded pool</text>
+<text x="323" y="49" class="t-mid">≈ CPU cores</text>
+<path d="M230 35 H252" class="line" marker-end="url(#ah-8-2)" />
+<text x="241" y="25" class="t-small t-mid t-muted">no</text>
+<rect x="10" y="88" width="220" height="50" rx="6" class="box" />
+<text x="120" y="109" class="t-mid t-bold">On Java 21</text>
+<text x="120" y="127" class="t-mid t-bold">or later?</text>
+<rect x="256" y="88" width="134" height="50" rx="6" class="s-queue" />
+<text x="323" y="109" class="t-mid">CompletableFuture</text>
+<text x="323" y="127" class="t-mid">+ own pool</text>
+<path d="M230 113 H252" class="line" marker-end="url(#ah-8-2)" />
+<text x="241" y="103" class="t-small t-mid t-muted">no</text>
+<rect x="10" y="166" width="220" height="50" rx="6" class="box" />
+<text x="120" y="187" class="t-mid t-bold">API already gives a</text>
+<text x="120" y="205" class="t-mid t-bold">future, or reactive?</text>
+<rect x="256" y="166" width="134" height="50" rx="6" class="s-queue" />
+<text x="323" y="187" class="t-mid">Keep it</text>
+<text x="323" y="205" class="t-mid">(compose or join)</text>
+<path d="M230 191 H252" class="line" marker-end="url(#ah-8-2)" />
+<text x="241" y="181" class="t-small t-mid t-muted">yes</text>
+<rect x="10" y="244" width="220" height="50" rx="6" class="box" />
+<text x="120" y="265" class="t-mid t-bold">Does a downstream</text>
+<text x="120" y="283" class="t-mid t-bold">have a limit?</text>
+<rect x="256" y="244" width="134" height="50" rx="6" class="s-work" />
+<text x="323" y="265" class="t-mid">Virtual threads</text>
+<text x="323" y="283" class="t-mid">+ Semaphore</text>
+<path d="M230 269 H252" class="line" marker-end="url(#ah-8-2)" />
+<text x="241" y="259" class="t-small t-mid t-muted">yes</text>
+<rect x="10" y="322" width="220" height="40" rx="6" class="s-work" />
+<text x="120" y="347" class="t-mid t-bold">Virtual threads, plain code</text>
+<path d="M120 60 V84" class="line" marker-end="url(#ah-8-2)" />
+<text x="128" y="77" class="t-small t-muted">yes</text>
+<path d="M120 138 V162" class="line" marker-end="url(#ah-8-2)" />
+<text x="128" y="155" class="t-small t-muted">yes</text>
+<path d="M120 216 V240" class="line" marker-end="url(#ah-8-2)" />
+<text x="128" y="233" class="t-small t-muted">no</text>
+<path d="M120 294 V318" class="line" marker-end="url(#ah-8-2)" />
+<text x="128" y="311" class="t-small t-muted">no</text>
+</svg>
+<figcaption><b>Figure 8.2</b> For one request doing several calls. Work that arrives from a queue starts with listener concurrency instead (<a href="../threads-futures-queues-7-queue-consumers-at-scale/">Chapter 7</a>).</figcaption>
+</figure>
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>You need to…</th><th>Use</th><th>Chapter</th></tr>
+</thead>
+<tbody>
+<tr><td>Call several services in parallel in one request (Java 21+)</td><td>Virtual threads + <code>newVirtualThreadPerTaskExecutor</code>. <code>StructuredTaskScope</code> once Java 28 is out.</td><td>6</td></tr>
+<tr><td>Same, on Java 17</td><td><code>CompletableFuture</code> with your own bounded, named executor</td><td>4, 5</td></tr>
+<tr><td>Stop overloading a downstream</td><td><code>Semaphore</code>, <code>@ConcurrencyLimit</code>, or a bounded pool</td><td>6</td></tr>
+<tr><td>Process messages from a queue</td><td>Listener <code>concurrency</code> + prefetch / poll size. Work inside the listener.</td><td>7</td></tr>
+<tr><td>Do something after the response, fire and forget</td><td><code>@Async</code> on a bounded executor with error logging, or better, publish a message</td><td>2, 5</td></tr>
+<tr><td>CPU-heavy work in parallel</td><td>A bounded platform pool about the size of your cores</td><td>3, 6</td></tr>
+<tr><td>Use a library that returns a <code>CompletableFuture</code></td><td>Compose on it, or <code>join()</code> it on a virtual thread</td><td>4, 6</td></tr>
+<tr><td>Run something every N seconds</td><td><code>@Scheduled</code>. The default scheduler has <strong>one</strong> thread (<code>spring.task.scheduling.pool.size</code>).</td><td>2</td></tr>
+</tbody>
+</table>
+</div>
+
+## Numbers worth remembering
+
+Defaults, from the current docs. Check your own config: teams often override them.
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Thing</th><th>Default</th></tr>
+</thead>
+<tbody>
+<tr><td>Tomcat request threads (<code>server.tomcat.threads.max</code>)</td><td>200</td></tr>
+<tr><td>Tomcat waiting connections (<code>server.tomcat.accept-count</code>)</td><td>100</td></tr>
+<tr><td>Common ForkJoinPool</td><td>CPU cores − 1</td></tr>
+<tr><td>Spring Boot <code>@Async</code> pool (platform threads)</td><td>8 core threads, unbounded queue</td></tr>
+<tr><td>Spring Boot <code>@Async</code> on virtual threads</td><td>A new virtual thread per task, no limit unless you set one</td></tr>
+<tr><td>Spring Boot <code>@Scheduled</code></td><td>1 thread</td></tr>
+<tr><td>Kafka <code>max.poll.records</code> / <code>max.poll.interval.ms</code></td><td>500 / 5 minutes</td></tr>
+<tr><td>RabbitMQ prefetch (Spring AMQP)</td><td>250 per consumer</td></tr>
+<tr><td>SQS <code>maxConcurrentMessages</code> / <code>maxMessagesPerPoll</code></td><td>10 / 10</td></tr>
+<tr><td>HikariCP <code>maximumPoolSize</code></td><td>10</td></tr>
+</tbody>
+</table>
+</div>
+
+<aside class="callout why">
+<p class="callout-title">Why it matters</p>
+<p>Most production incidents with async code aren't clever bugs. They're a default nobody looked at: an unbounded queue, a pool of 10 behind 200 request threads, a single scheduler thread. Knowing these numbers turns "it's slow sometimes" into "the Hikari pool is the bottleneck".</p>
+</aside>
+
+## Glossary
+
+<dl class="glossary"> <dt>Thread</dt><dd>One line of execution: the code runs step by step on it. A cook.</dd> <dt>Platform thread</dt><dd>A Java thread backed by one operating-system thread. Costly, so you keep hundreds, not hundreds of thousands.</dd> <dt>Virtual thread</dt><dd>A thread managed by the JVM (Java 21+). Cheap; it gives up its carrier while it waits.</dd> <dt>Carrier thread</dt><dd>A platform thread that runs virtual threads, one at a time.</dd> <dt>Thread pool / executor</dt><dd>A fixed crew of threads that takes tasks from a queue. <code>ThreadPoolTaskExecutor</code> in Spring.</dd> <dt>Task queue</dt><dd>Where tasks wait for a free thread. The ticket rail. Should be bounded.</dd> <dt>Common pool</dt><dd>The JVM-wide <code>ForkJoinPool</code> that <code>supplyAsync</code> uses when you pass no executor. Cores − 1 threads.</dd> <dt>Blocking</dt><dd>A call that makes the thread wait until it returns, like a socket read or <code>future.get()</code>.</dd> <dt>I/O wait</dt><dd>Time spent waiting for a network, disk or database, not using the CPU.</dd> <dt>CompletableFuture</dt><dd>A ticket for a result that may not exist yet, plus a list of steps to run when it does.</dd> <dt>Stage</dt><dd>One step in a <code>CompletableFuture</code> chain (<code>thenApply</code>, <code>thenCompose</code>, …).</dd> <dt>Latency</dt><dd>How long one request takes, start to finish.</dd> <dt>Throughput</dt><dd>How many requests (or messages) are finished per second.</dd> <dt>Little's law</dt><dd>In flight = rate × time each. 1,000/s × 0.05&nbsp;s = 50 at once.</dd> <dt>Context switch</dt><dd>The CPU stopping one thread to run another. Cheap once, costly by the million.</dd> <dt>Backpressure</dt><dd>Slowing down whoever sends work when you are full, instead of piling it up.</dd> <dt>Rejection policy</dt><dd>What a full pool does with a new task: throw, run it on the caller, or drop it.</dd> <dt>Starvation</dt><dd>A task that is ready but never gets a thread.</dd> <dt>Deadlock</dt><dd>Tasks waiting on each other in a circle, so none can move.</dd> <dt>ThreadLocal</dt><dd>A variable with a separate value per thread. Holds the MDC and the security context.</dd> <dt>MDC</dt><dd>Mapped Diagnostic Context: the key-values (like trace id) your logger adds to every line.</dd> <dt>TaskDecorator</dt><dd>A Spring wrapper around each task, used to copy context to the worker thread.</dd> <dt>Semaphore</dt><dd>A counter of permits. Caps how many callers can be inside a section at once.</dd> <dt>Pinning</dt><dd>A virtual thread that can't unmount while it waits, so it holds its carrier. Mostly fixed in Java 24+.</dd> <dt>Structured concurrency</dt><dd>Forking subtasks inside a scope that waits for, and cancels, all of them. Preview until Java 28.</dd> <dt>Listener concurrency</dt><dd>How many messages a queue consumer processes at once.</dd> <dt>Prefetch / poll size</dt><dd>How many messages a consumer pulls into memory ahead of processing.</dd> <dt>Partition</dt><dd>A Kafka topic's unit of order and parallelism. One consumer per partition per group.</dd> <dt>Rebalance</dt><dd>Kafka moving partitions between consumers, for example when one is too slow to poll.</dd> <dt>Lag</dt><dd>How far a consumer is behind the newest message. The number to watch.</dd> <dt>Thread dump</dt><dd>A snapshot of every thread and the line it is on. <code>jcmd &lt;pid&gt; Thread.print</code>.</dd> </dl>
+
+<aside class="callout recap">
+<p class="callout-title">Recap</p>
+<ol>
+<li>Read async code in five steps: where work leaves, who runs it, the chain in plain words, the end and the failure path, and the limits.</li>
+<li>Waiting-heavy work on Java 21+: virtual threads plus an explicit limit. CPU work: a small bounded pool. Queue work: listener concurrency.</li>
+<li>Know the defaults (200, cores − 1, 8 + unbounded, 500, 250, 10). Most incidents hide in one of them.</li>
+</ol>
+</aside>

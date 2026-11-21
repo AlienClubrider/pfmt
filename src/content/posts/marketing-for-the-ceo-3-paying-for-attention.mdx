@@ -1,0 +1,282 @@
+---
+title: "Paying for attention"
+date: 2026-11-21
+category: tech
+series:
+  id: marketing-for-the-ceo
+  title: "Marketing for the CEO"
+part: 3
+partsTotal: 4
+tags: ["marketing", "startups", "apps", "ads"]
+readingMinutes: 10
+summary: "Ads are the fast lane: you pay, and people see your app today instead of in six months. This chapter covers where ads run, how a campaign works, and the one bit of maths that tells you whether an ad is making money or burning it."
+---
+## What an ad really buys
+
+Free channels ([Chapter 2](../marketing-for-the-ceo-2-getting-found-without-paying/)) are slow: months before search and the app stores send real traffic. An <dfn>ad</dfn> skips the wait. You pay a platform (Facebook, Google, Apple, TikTok) to put your message in front of people now.
+
+What you buy is *attention*, not customers. The platform promises that people will see your ad. Whether they tap, try the app and stay is still up to your ad, your page and your app.
+
+<aside class="callout analogy">
+<p class="callout-title">In the shop</p>
+<p>Back to our small shop. Ads are the <strong>flyers and billboards</strong>. Three kinds matter:</p>
+<ul>
+<li><strong>Search ads</strong> are like paying to be the first name on the mall directory when someone asks "where can I buy board games?" They were already looking.</li>
+<li><strong>Social ads</strong> are flyers handed to people walking past. They weren't looking for you, so the flyer has to stop them.</li>
+<li><strong>Retargeting</strong> is a reminder flyer to people who peeked in the window and walked on.</li>
+</ul>
+<p>Flyers stop working the day you stop paying. Your sign, your busy street and your regulars keep working for free.</p>
+</aside>
+
+### Where you can buy ads
+
+There are many ad platforms, but for an app like RuleBuddy, five matter. The big difference between them is *mindset*: is the person searching for something like you, or scrolling for fun?
+
+Searching people are called <dfn>high intent</dfn>. They're easier to win but cost more per tap. Scrolling people are <dfn>low intent</dfn>. They're cheaper to reach, but your ad has to interrupt them.
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Platform</th><th>Where the ad shows</th><th>Their mindset</th><th>Fit for RuleBuddy</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Meta</strong> (Facebook, Instagram)</td><td>Feeds, Stories, Reels; also Messenger and partner apps</td><td>Scrolling, low intent</td><td>Good if a short video shows the "we're arguing about the rules" moment.</td></tr>
+<tr><td><strong>Google Search</strong></td><td>Above search results, for words you pick</td><td>Searching, high intent</td><td>Good for questions like "how does scoring work in Wingspan".</td></tr>
+<tr><td><strong>Apple Search Ads</strong> (now called Apple Ads)</td><td>In App Store search results</td><td>About to download, very high intent</td><td>Only for an iPhone app. People are already shopping for apps.</td></tr>
+<tr><td><strong>TikTok</strong></td><td>Between short videos</td><td>Entertainment, low intent</td><td>Only with videos that feel like normal TikToks, e.g. game-night moments.</td></tr>
+<tr><td><strong>Reddit</strong></td><td>In the feeds of chosen communities</td><td>Browsing a hobby</td><td>Can target board game communities directly. Redditors dislike salesy ads.</td></tr>
+</tbody>
+</table>
+</div>
+
+<aside class="callout note">
+<p class="callout-title">As of 2026</p>
+<p>Apple renamed Apple Search Ads to <strong>Apple Ads</strong> in 2025. One Meta Ads Manager runs ads across Facebook, Instagram, Messenger and its Audience Network of partner apps. Meta now runs much of its targeting automatically (it calls this <strong>Advantage+</strong>): you set a goal, a budget and a few ads, and its system picks who sees them. Google has a similar automatic option for apps, called <strong>App campaigns</strong>, which spreads one budget across Search, Google Play and YouTube. For websites, its all-in-one version is <strong>Performance Max</strong>. With targeting and placement automated, the levers left to you are mainly the <strong>creative</strong> and the <strong>budget</strong>. These products change often; the ads manager checks current options before each campaign.</p>
+</aside>
+
+## How a campaign works: four dials
+
+A <dfn>campaign</dfn> is one ad push with one goal, such as "get sign-ups for RuleBuddy". Whatever the platform, you set four dials:
+
+1. **Audience**: who can see it. Country, age, interests, or "people like my users". On Meta in 2026 it is often left broad on purpose.
+2. **Creative**: the ad itself, meaning the picture or video plus the words. The industry calls this the <dfn>creative</dfn>. It matters most today: the platform learns who to show it to from how people react.
+3. **Budget**: how much per day or in total.
+4. **Bid and goal**: what you are paying for, such as views, clicks or sign-ups. Most people let the platform bid for them ("automatic bidding") and just pick the goal.
+
+Every time someone opens Instagram or searches Google, the ads that could show there compete in a split-second <dfn>auction</dfn>. The winner isn't simply the highest bidder. Platforms also score how likely people are to engage with the ad, so a good ad can beat a bigger budget.
+
+<figure class="fig" id="fig-3-1">
+<svg viewBox="0 0 400 300" role="img" aria-labelledby="fig-3-1-t">
+<title id="fig-3-1-t">Four dials, audience, creative, budget, and bid and goal, feed a split-second auction, which decides whether your ad is shown to a person.</title>
+<defs>
+<marker id="ah-3-1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" class="ah" />
+</marker>
+</defs>
+<rect x="16" y="14" width="176" height="56" rx="6" class="box" />
+<text x="104" y="38" class="t-mid t-bold">Audience</text>
+<text x="104" y="57" class="t-mid t-muted">who can see it</text>
+<rect x="208" y="14" width="176" height="56" rx="6" class="box" stroke-width="3" />
+<text x="296" y="38" class="t-mid t-bold t-big">Creative</text>
+<text x="296" y="57" class="t-mid">the ad (biggest dial)</text>
+<rect x="16" y="82" width="176" height="56" rx="6" class="box" />
+<text x="104" y="106" class="t-mid t-bold">Budget</text>
+<text x="104" y="125" class="t-mid t-muted">$ per day</text>
+<rect x="208" y="82" width="176" height="56" rx="6" class="box" />
+<text x="296" y="106" class="t-mid t-bold">Bid and goal</text>
+<text x="296" y="125" class="t-mid t-muted">what you pay for</text>
+<path d="M104 140 L170 176 M296 140 L230 176" class="line" marker-end="url(#ah-3-1)" />
+<rect x="100" y="180" width="200" height="44" rx="6" class="f-queue" />
+<text x="200" y="200" class="t-mid t-on t-bold">Auction</text>
+<text x="200" y="216" class="t-mid t-on">your ad in line with others</text>
+<path d="M200 226 V252" class="line" marker-end="url(#ah-3-1)" />
+<rect x="110" y="256" width="180" height="34" rx="17" class="s-thread" />
+<text x="200" y="278" class="t-mid">shown to one person</text>
+</svg>
+<figcaption><b>Figure 3.1</b> You set four dials. The platform runs an auction every time an ad slot appears. The creative has the thick border because in 2026 it does most of the work of finding the right people.</figcaption>
+</figure>
+
+<p class="ask"><strong>Tell the team:</strong> "Make five different creatives for one audience, and tell me which one wins."</p>
+
+### Retargeting: the reminder flyer
+
+<dfn>Retargeting</dfn> (also called remarketing) means showing ads only to people who already visited your website or installed your app but didn't take the next step. They know you, so they're often the cheapest people to win back.
+
+It needs two things. First, a tracking tag on your site or app so the platform knows who visited. On Meta this is the <dfn>pixel</dfn> plus its server-side partner, the <dfn>Conversions API</dfn>. Second, enough visitors to make an audience worth showing ads to. With a few dozen visitors a month, it isn't worth setting up yet.
+
+Keep it polite: cap how often one person sees it, and stop after a couple of weeks. Ten sightings of the same ad feels creepy.
+
+<p class="ask"><strong>Tell the team:</strong> "Install tracking now, and start retargeting once we have enough visitors."</p>
+
+## The money math
+
+This is the part to remember. An ad turns dollars into users, and it's only worth running if the users are worth more than they cost. Three numbers tell you that.
+
+- <dfn>CAC</dfn> (customer acquisition cost): what you spent to get one customer. Ad spend ÷ new customers. Decide up front whether "customer" means a sign-up or a *paying* user. Paying is the one that matters.
+- <dfn>LTV</dfn> (lifetime value): how much money one customer brings in before they leave. For a subscription, that is roughly price per month × months they stay, minus the app store's cut. For small developers like us, the store cut is usually 15% (as of 2026).
+- <dfn>Payback</dfn>: how many months of a customer's payments it takes to earn back their CAC. Shorter is safer, because the money comes back to spend again.
+
+The ads dashboard shows smaller numbers that tell you where people drop off:
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Number</th><th>Means</th></tr>
+</thead>
+<tbody>
+<tr><td><dfn>Impressions</dfn></td><td>How many times the ad was shown.</td></tr>
+<tr><td><dfn>CPM</dfn></td><td>Cost per 1,000 impressions (the "M" is Roman for 1,000).</td></tr>
+<tr><td><dfn>CTR</dfn> (click-through rate)</td><td>Share of viewers who tapped. Low CTR = the creative isn't stopping people.</td></tr>
+<tr><td><dfn>CPC</dfn> / <dfn>CPI</dfn></td><td>Cost per click / cost per install.</td></tr>
+<tr><td><dfn>Conversion rate</dfn></td><td>Share of people who took the next step: install, sign up or pay (see <a href="../marketing-for-the-ceo-1-the-marketing-map/#the-funnel-find-try-keep-tell">the funnel</a>).</td></tr>
+</tbody>
+</table>
+</div>
+
+Step through what $100 might buy. **Every number here is made up** to show the shape, not RuleBuddy's real results.
+
+<Stepper>
+<figure class="fig stepper" id="fig-3-2">
+<svg viewBox="0 0 400 340" role="img" aria-labelledby="fig-3-2-t">
+<title id="fig-3-2-t">Hypothetical funnel for 100 dollars of ads: 20,000 people see it, 200 tap, 20 install, 2 pay, so the cost per paying user is 50 dollars.</title>
+<text x="16" y="20" class="t-muted">Hypothetical: $100 on one ad</text>
+<g data-step="1">
+<text x="16" y="46" class="t-bold">Saw the ad</text>
+<rect x="16" y="54" width="368" height="28" rx="6" class="s-thread grow-x" />
+<text x="28" y="73">20,000 impressions</text>
+</g>
+<g data-step="2">
+<text x="16" y="108" class="t-bold">Tapped (1%)</text>
+<rect x="16" y="116" width="150" height="28" rx="6" class="s-wait grow-x" />
+<text x="28" y="135">200 people</text>
+<text x="384" y="135" class="t-end c-bad">19,800 scrolled by</text>
+</g>
+<g data-step="3">
+<text x="16" y="170" class="t-bold">Installed / signed up (10%)</text>
+<rect x="16" y="178" width="84" height="28" rx="6" class="f-thread grow-x" />
+<text x="58" y="197" class="t-mid t-on">20</text>
+<text x="384" y="197" class="t-end c-bad">180 left the page</text>
+</g>
+<g data-step="4">
+<text x="16" y="232" class="t-bold">Paid (10%)</text>
+<rect x="16" y="240" width="40" height="28" rx="6" class="f-work grow-x" />
+<text x="36" y="259" class="t-mid t-on">2</text>
+<text x="384" y="259" class="t-end c-bad">18 tried, didn't pay</text>
+</g>
+<g data-step="5">
+<rect x="16" y="286" width="368" height="44" rx="6" class="s-work blink-in" />
+<text x="200" y="305" class="t-mid t-bold">CAC = $100 ÷ 2 paying = $50 each</text>
+<text x="200" y="322" class="t-mid">Is a paying user worth more than $50?</text>
+</g>
+</svg>
+<ol class="step-notes">
+<li>$100 at a made-up CPM of $5 buys about 20,000 impressions. That means 20,000 chances to stop someone's thumb.</li>
+<li>1% tap (a CTR of 1%). That's 200 visitors, at $0.50 a click. Most people scroll past, and that's normal.</li>
+<li>10% of visitors install or sign up: 20 new users. The other 180 bounced off the store page or website.</li>
+<li>10% of those new users go on to pay: 2 paying customers.</li>
+<li>So each paying customer cost $50. That's the CAC. Whether $50 is good depends on the next figure.</li>
+</ol>
+<figcaption><b>Figure 3.2</b> Money turns into people, and most drop off at each step (red). Improving any one step lowers the cost of every paying customer.</figcaption>
+</figure>
+</Stepper>
+
+Now compare that $50 with what a customer is worth. Say RuleBuddy charged $3 a month and the average payer stayed 6 months. That's $18, minus a 15% store cut: about **$15 LTV**. Paying $50 to earn $15 loses $35 per customer. More budget would lose more money, faster.
+
+<figure class="fig" id="fig-3-3">
+<svg viewBox="0 0 400 260" role="img" aria-labelledby="fig-3-3-t">
+<title id="fig-3-3-t">Two hypothetical cases. Losing: a customer costs 50 dollars and is worth 15. Healthy: a customer costs 14 dollars and is worth 42, three times the cost.</title>
+<text x="16" y="24" class="t-bold c-bad">Losing money</text>
+<text x="16" y="50">Cost (CAC)</text>
+<rect x="110" y="36" width="250" height="22" rx="4" class="s-bad" />
+<text x="352" y="52" class="t-end t-bold">$50</text>
+<text x="16" y="82">Worth (LTV)</text>
+<rect x="110" y="68" width="75" height="22" rx="4" class="f-work" />
+<text x="193" y="84" class="t-bold">$15</text>
+<text x="16" y="112" class="t-muted">Each payer loses $35. Don't scale.</text>
+<path d="M16 132 H384" class="line-soft" />
+<text x="16" y="160" class="t-bold c-work">Healthy</text>
+<text x="16" y="186">Cost (CAC)</text>
+<rect x="110" y="172" width="70" height="22" rx="4" class="s-bad" />
+<text x="188" y="188" class="t-bold">$14</text>
+<text x="16" y="218">Worth (LTV)</text>
+<rect x="110" y="204" width="210" height="22" rx="4" class="f-work" />
+<text x="312" y="220" class="t-end t-on t-bold">$42</text>
+<text x="16" y="248" class="t-muted">Worth 3× the cost. Safe to spend more.</text>
+</svg>
+<figcaption><b>Figure 3.3</b> The whole game in one picture: the green bar (what a customer is worth) must be clearly longer than the red one (what they cost). A common rule of thumb is LTV at least 3× CAC. All numbers are made up.</figcaption>
+</figure>
+
+<aside class="callout why">
+<p class="callout-title">Why it matters</p>
+<p>You can fix a losing ad from either side. Lower the cost: a better creative gets more taps, and a clearer store page gets more installs. Or raise the worth: better onboarding keeps people longer, and better pricing earns more per person. Ads <em>multiply</em> whatever your funnel already does. A leaky funnel with more ad money just leaks faster.</p>
+</aside>
+
+<p class="ask"><strong>Tell the team:</strong> "Before we spend, show me our CAC, LTV and payback, even as rough estimates."</p>
+
+## Test small before you spend big
+
+Nobody knows ahead of time which ad will work, not even pros. So run cheap experiments and let the numbers pick. A typical first test:
+
+1. **One goal.** Pick the action you want, for example sign-ups. Check that tracking actually counts it *before* spending a dollar.
+2. **One platform.** Pick the one whose mindset fits (the table above).
+3. **3 to 5 creatives.** Same audience, different <dfn>hooks</dfn>. A hook is the first line or first second that makes someone stop scrolling. AI tools now make it cheap to produce many variations, so the limit is good ideas, not production time. For example: "Stop arguing about the rules", "Learn any board game in 2 minutes", or a clip of a real game night.
+4. **A small budget you're fine losing.** For example $10 to $20 a day for a week (hypothetical). Don't touch it for the week.
+5. **Read, cut, repeat.** Compare cost per sign-up by creative. Stop the losers, test new ideas against the winner.
+6. **Scale slowly.** Only when CAC is comfortably below LTV, and in small steps. A common habit is about 20% more budget at a time, so the system doesn't reset.
+
+<aside class="callout watch">
+<p class="callout-title">Watch out</p>
+<ul>
+<li><strong>The learning phase.</strong> New campaigns perform unevenly at first while the platform figures out who responds. Meta's own guidance has long been about 50 results in a week before its system settles. Editing the campaign every day restarts that learning.</li>
+<li><strong>The wrong goal.</strong> If you ask for clicks, you get people who click, not people who sign up. Always optimise for the action closest to money that you can track.</li>
+<li><strong>Fuzzy numbers on iPhone.</strong> Since Apple's privacy changes (App Tracking Transparency, 2021), many iPhone users can't be tracked across apps. So platforms <em>estimate</em> some results. Treat dashboard numbers as a good guess and check them against real sign-ups in your own app.</li>
+</ul>
+</aside>
+
+## When ads are worth it, and when they aren't
+
+<div class="compare">
+<div>
+<p class="compare-label good">Worth trying when…</p>
+<ul>
+<li>People who find the app for free already stick around, and some pay.</li>
+<li>You know roughly what a customer is worth (LTV).</li>
+<li>Tracking works from ad tap to sign-up to payment.</li>
+<li>You have a clear one-line promise (Chapter 1) and an ad that shows it.</li>
+<li>The test budget is money you're fine losing to learn.</li>
+</ul>
+</div>
+<div>
+<p class="compare-label bad">Not yet when…</p>
+<ul>
+<li>Most new users leave in the first week. Fix the app first.</li>
+<li>You can't see what happens after the click.</li>
+<li>You're hoping ads will tell you who the app is for. That's positioning work, and it comes first.</li>
+<li>The app earns nothing and has no plan to.</li>
+<li>It's a family app. Those stay private: no marketing at all.</li>
+</ul>
+</div>
+</div>
+
+A good order for our apps: free channels first, then a small ad test once free users show the app keeps people. Ads amplify what already works; they rarely create it.
+
+## About that RuleBuddy Facebook ad
+
+We don't have its numbers, so this isn't a verdict. These are the usual reasons a first Facebook ad underwhelms; most hit several:
+
+1. **It was a "boost" or aimed at clicks.** Boosting a post usually optimises for likes and engagement, so Meta found people who like things, not people who sign up.
+2. **Small budget, short run.** The system never got enough results to leave the learning phase, so it was still guessing when the ad stopped.
+3. **One creative.** With nothing to compare, there was no way to learn which message works.
+4. **Interruption, not intent.** Nobody on Facebook was looking for a rules helper right then. The ad had one second to show the problem.
+5. **No tracking after the tap.** Without the pixel or an app event, nobody could see whether anyone signed up, so the result felt like nothing.
+
+None of this means Facebook ads can't work for RuleBuddy, only that the next try should be a proper test. **Tell the team:** *"Run a one-week Meta test for RuleBuddy, $X a day, 3 to 5 creatives, optimise for sign-ups, and confirm tracking works before launch."*
+
+<aside class="callout recap">
+<p class="callout-title">Recap</p>
+<ol>
+<li>Ads buy attention, not customers. Search ads catch people already looking (high intent). Social ads interrupt people scrolling (low intent).</li>
+<li>A campaign is four dials: audience, creative, budget, and bid and goal. In 2026 the creative matters most, so test 3 to 5 small and let the numbers pick.</li>
+<li>Only scale when a customer is worth clearly more than they cost: LTV well above CAC (around 3×), with tracking you trust.</li>
+</ol>
+</aside>

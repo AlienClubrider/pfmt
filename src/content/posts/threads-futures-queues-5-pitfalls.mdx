@@ -1,0 +1,509 @@
+---
+title: "Pitfalls, and how to spot them"
+date: 2026-11-20
+category: tech
+series:
+  id: threads-futures-queues
+  title: "Threads, Futures and Queues"
+part: 5
+partsTotal: 8
+tags: ["java", "concurrency", "spring-boot", "debugging"]
+readingMinutes: 8
+summary: "Chapter 4 showed how a CompletableFuture chain is meant to work. This chapter covers the six ways it usually goes wrong in a real service. Each one looks fine in code review and fine on your laptop. They show up only under load."
+---
+<aside class="callout analogy">
+<p class="callout-title">In the kitchen, on a bad night</p>
+<ul>
+<li>A cook stands at the oven waiting for bread instead of cooking. <strong>Blocking inside the pool.</strong></li>
+<li>The ticket rail has no end, so tickets pile up out the door. <strong>Unbounded queue.</strong></li>
+<li>A dish is dropped and nobody tells the waiter. <strong>Lost exception.</strong></li>
+<li>Two cooks each wait for the other to finish a sauce. <strong>Starvation and deadlock.</strong></li>
+<li>A ticket is passed on without the table number. <strong>Lost context.</strong></li>
+<li>A cook waits for a supplier who never shows up. <strong>No timeout.</strong></li>
+</ul>
+</aside>
+
+## 1. Blocking inside the pool
+
+You met this trap in [Chapter 4](../threads-futures-queues-4-completablefuture-read-slowly/#the-common-pool-trap). Here is what it does to a busy service.
+
+When you call `supplyAsync(() -> …)` with no second argument, the task runs on the <dfn>common ForkJoinPool</dfn>. The whole JVM shares that one pool: parallel streams, some libraries, and every other `supplyAsync` without an executor.
+
+Its size is the number of CPU cores minus one. On an 8-core pod that is just **7 threads**. It was built for short bursts of CPU work.
+
+Put a slow HTTP call in it and the thread just stands there waiting. Seven slow calls and the pool is full of waiting threads. Everything else that uses it now waits in line.
+
+<p class="code-title">Don't: blocking call on the common pool</p>
+
+```java
+// No executor, so this runs on the shared common pool.
+var price = CompletableFuture.supplyAsync(
+    () -> pricingClient.fetch(sku));   // blocks ~300 ms
+```
+
+<Stepper>
+<figure class="fig stepper" id="fig-5-1">
+<svg viewBox="0 0 400 285" role="img" aria-labelledby="fig-5-1-t">
+<title id="fig-5-1-t">The common pool's seven workers all block on HTTP calls, and new tasks pile up in its queue.</title>
+<defs>
+<pattern id="hatch-5-1" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<rect width="2.5" height="6" class="f-wait" opacity=".45" />
+</pattern>
+</defs>
+<text x="10" y="20" class="t-bold">commonPool: 7 workers (8 cores)</text>
+<text x="347" y="30" class="t-small t-muted t-mid">waiting tasks</text>
+<g>
+<text x="10" y="51" class="t-mono t-small">worker-1</text>
+<text x="10" y="81" class="t-mono t-small">worker-2</text>
+<text x="10" y="111" class="t-mono t-small">worker-3</text>
+<text x="10" y="141" class="t-mono t-small">worker-4</text>
+<text x="10" y="171" class="t-mono t-small">worker-5</text>
+<text x="10" y="201" class="t-mono t-small">worker-6</text>
+<text x="10" y="231" class="t-mono t-small">worker-7</text>
+<rect x="85" y="36" width="210" height="22" rx="6" class="box" />
+<rect x="85" y="66" width="210" height="22" rx="6" class="box" />
+<rect x="85" y="96" width="210" height="22" rx="6" class="box" />
+<rect x="85" y="126" width="210" height="22" rx="6" class="box" />
+<rect x="85" y="156" width="210" height="22" rx="6" class="box" />
+<rect x="85" y="186" width="210" height="22" rx="6" class="box" />
+<rect x="85" y="216" width="210" height="22" rx="6" class="box" />
+<rect x="305" y="36" width="85" height="202" rx="6" class="box" />
+</g>
+<g data-only="1" class="t-muted is-off">
+<text x="190" y="51" class="t-small t-muted t-mid">idle</text>
+<text x="190" y="81" class="t-small t-muted t-mid">idle</text>
+<text x="190" y="111" class="t-small t-muted t-mid">idle</text>
+<text x="190" y="141" class="t-small t-muted t-mid">idle</text>
+<text x="190" y="171" class="t-small t-muted t-mid">idle</text>
+<text x="190" y="201" class="t-small t-muted t-mid">idle</text>
+<text x="190" y="231" class="t-small t-muted t-mid">idle</text>
+</g>
+<g data-step="2">
+<rect x="85" y="36" width="210" height="22" rx="6" class="s-wait grow-x" />
+<rect x="85" y="36" width="210" height="22" rx="6" class="hatch" fill="url(#hatch-5-1)" />
+<rect x="85" y="66" width="210" height="22" rx="6" class="s-wait grow-x" />
+<rect x="85" y="66" width="210" height="22" rx="6" class="hatch" fill="url(#hatch-5-1)" />
+<rect x="85" y="96" width="210" height="22" rx="6" class="s-wait grow-x" />
+<rect x="85" y="96" width="210" height="22" rx="6" class="hatch" fill="url(#hatch-5-1)" />
+<text x="190" y="51" class="t-small t-mid">waiting on HTTP</text>
+<text x="190" y="81" class="t-small t-mid">waiting on HTTP</text>
+<text x="190" y="111" class="t-small t-mid">waiting on HTTP</text>
+</g>
+<g data-step="3">
+<rect x="85" y="126" width="210" height="22" rx="6" class="s-wait grow-x" />
+<rect x="85" y="126" width="210" height="22" rx="6" class="hatch" fill="url(#hatch-5-1)" />
+<rect x="85" y="156" width="210" height="22" rx="6" class="s-wait grow-x" />
+<rect x="85" y="156" width="210" height="22" rx="6" class="hatch" fill="url(#hatch-5-1)" />
+<rect x="85" y="186" width="210" height="22" rx="6" class="s-wait grow-x" />
+<rect x="85" y="186" width="210" height="22" rx="6" class="hatch" fill="url(#hatch-5-1)" />
+<rect x="85" y="216" width="210" height="22" rx="6" class="s-wait grow-x" />
+<rect x="85" y="216" width="210" height="22" rx="6" class="hatch" fill="url(#hatch-5-1)" />
+<text x="190" y="141" class="t-small t-mid">waiting on HTTP</text>
+<text x="190" y="171" class="t-small t-mid">waiting on HTTP</text>
+<text x="190" y="201" class="t-small t-mid">waiting on HTTP</text>
+<text x="190" y="231" class="t-small t-mid">waiting on HTTP</text>
+</g>
+<g data-step="4">
+<rect x="312" y="44" width="71" height="24" rx="6" class="s-queue blink-in" />
+<text x="347" y="60" class="t-small t-mid">price</text>
+<rect x="312" y="74" width="71" height="24" rx="6" class="s-queue blink-in" />
+<text x="347" y="90" class="t-small t-mid">price</text>
+<rect x="312" y="104" width="71" height="24" rx="6" class="s-bad blink-in" />
+<text x="347" y="120" class="t-small t-mid">stream</text>
+<rect x="312" y="134" width="71" height="24" rx="6" class="s-queue blink-in" />
+<text x="347" y="150" class="t-small t-mid">price</text>
+<rect x="312" y="164" width="71" height="24" rx="6" class="s-queue blink-in" />
+<text x="347" y="180" class="t-small t-mid">price</text>
+<text x="347" y="220" class="t-big t-mid t-muted">⋮</text>
+<text x="200" y="268" class="t-bold t-mid c-bad">CPU mostly idle, latency climbing</text>
+</g>
+</svg>
+<ol class="step-notes">
+<li>The common pool has one worker per CPU core, minus one. On an 8-core pod that is 7.</li>
+<li>Requests call <code>supplyAsync</code> with no executor. Each call takes a worker, and the worker just waits about 300&nbsp;ms for the HTTP reply.</li>
+<li>A few dozen requests a second is enough to have all 7 workers waiting. The CPU is barely busy, but no worker is free.</li>
+<li>New tasks queue up behind them, including a parallel stream in some unrelated code. Latency climbs everywhere at once.</li>
+</ol>
+<figcaption><b>Figure 5.1</b> Seven waiting threads are enough to stall every user of the shared pool.</figcaption>
+</figure>
+</Stepper>
+
+The fix is to give blocking work its **own** pool, sized for waiting, and to pass it in every time:
+
+<p class="code-title">PricingExecutorConfig.java</p>
+
+```java
+@Configuration
+class PricingExecutorConfig {
+
+    @Bean
+    ThreadPoolTaskExecutor pricingExecutor() {
+        var ex = new ThreadPoolTaskExecutor();
+        ex.setThreadNamePrefix("pricing-"); // (1)
+        ex.setCorePoolSize(32);
+        ex.setMaxPoolSize(32);
+        ex.setQueueCapacity(200); // (2)
+        return ex;
+    }
+}
+```
+
+<ol class="code-notes">
+<li>A clear name shows up in logs and thread dumps, so you can tell who owns a stuck thread.</li>
+<li>A bounded queue. The next section explains why.</li>
+</ol>
+
+<p class="code-title">Do: pass the executor</p>
+
+```java
+var price = CompletableFuture.supplyAsync(
+    () -> pricingClient.fetch(sku), pricingExecutor);
+```
+
+Now a slow pricing service can fill only the `pricing-` threads. The rest of the app keeps going. [Chapter 6](../threads-futures-queues-6-the-readable-way-virtual-threads/) shows the other way out: virtual threads, where waiting is cheap.
+
+## 2. Unbounded pools and queues
+
+<dfn>Unbounded</dfn> means "no limit". There are two kinds, and both hurt.
+
+- **Unbounded threads.** `Executors.newCachedThreadPool()` makes a new thread whenever none is free. In a traffic spike you get thousands of platform threads. Each one reserves stack memory, and the CPU spends its time switching between them.
+- **Unbounded queue.** `Executors.newFixedThreadPool(n)` has a fixed number of threads but a queue with no end. Work is never refused. It just waits longer and longer, and every waiting task holds memory.
+
+Spring Boot's default executor (the one behind `@Async` when virtual threads are off) starts 8 core threads. Unless you set `queue-capacity`, its queue is unbounded.
+
+That has a sneaky side effect. A `ThreadPoolTaskExecutor` only adds threads beyond its core size when the queue is *full*. An endless queue is never full, so `max-size` never kicks in.
+
+<figure class="fig" id="fig-5-2">
+<svg viewBox="0 0 400 290" role="img" aria-labelledby="fig-5-2-t">
+<title id="fig-5-2-t">Top: eight busy threads and a queue that keeps growing. Bottom: a bounded queue that is full, so the caller runs the new task itself.</title>
+<defs>
+<marker id="ah-5-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" class="ah" />
+</marker>
+</defs>
+<text x="10" y="22" class="t-bold c-bad">Unbounded queue</text>
+<g>
+<rect x="10" y="36" width="18" height="18" rx="4" class="f-thread" />
+<rect x="32" y="36" width="18" height="18" rx="4" class="f-thread" />
+<rect x="54" y="36" width="18" height="18" rx="4" class="f-thread" />
+<rect x="76" y="36" width="18" height="18" rx="4" class="f-thread" />
+<rect x="10" y="58" width="18" height="18" rx="4" class="f-thread" />
+<rect x="32" y="58" width="18" height="18" rx="4" class="f-thread" />
+<rect x="54" y="58" width="18" height="18" rx="4" class="f-thread" />
+<rect x="76" y="58" width="18" height="18" rx="4" class="f-thread" />
+<text x="10" y="96" class="t-small">8 busy</text>
+</g>
+<g>
+<rect x="112" y="40" width="20" height="32" rx="4" class="s-queue" />
+<rect x="136" y="40" width="20" height="32" rx="4" class="s-queue" />
+<rect x="160" y="40" width="20" height="32" rx="4" class="s-queue" />
+<rect x="184" y="40" width="20" height="32" rx="4" class="s-queue" />
+<rect x="208" y="40" width="20" height="32" rx="4" class="s-queue" />
+<rect x="232" y="40" width="20" height="32" rx="4" class="s-queue" />
+<rect x="256" y="40" width="20" height="32" rx="4" class="s-queue" />
+<rect x="280" y="40" width="20" height="32" rx="4" class="s-queue" />
+<rect x="304" y="40" width="20" height="32" rx="4" class="s-queue" />
+<rect x="328" y="40" width="20" height="32" rx="4" class="s-queue" />
+<text x="355" y="62" class="t-big">…</text>
+<text x="112" y="96" class="t-small c-bad">12,000 tasks waiting, still growing</text>
+<text x="112" y="114" class="t-small t-muted">max-size never used · memory ↑ · wait ↑</text>
+</g>
+<path d="M10 140 H390" class="line-soft" />
+<text x="10" y="166" class="t-bold c-work">Bounded queue + CallerRunsPolicy</text>
+<g>
+<rect x="10" y="180" width="18" height="18" rx="4" class="f-thread" />
+<rect x="32" y="180" width="18" height="18" rx="4" class="f-thread" />
+<rect x="54" y="180" width="18" height="18" rx="4" class="f-thread" />
+<rect x="76" y="180" width="18" height="18" rx="4" class="f-thread" />
+<rect x="10" y="202" width="18" height="18" rx="4" class="f-thread" />
+<rect x="32" y="202" width="18" height="18" rx="4" class="f-thread" />
+<rect x="54" y="202" width="18" height="18" rx="4" class="f-thread" />
+<rect x="76" y="202" width="18" height="18" rx="4" class="f-thread" />
+<text x="10" y="240" class="t-small">8 busy</text>
+</g>
+<rect x="108" y="178" width="196" height="44" rx="6" class="box" />
+<rect x="114" y="184" width="20" height="32" rx="4" class="s-queue" />
+<rect x="138" y="184" width="20" height="32" rx="4" class="s-queue" />
+<rect x="162" y="184" width="20" height="32" rx="4" class="s-queue" />
+<rect x="186" y="184" width="20" height="32" rx="4" class="s-queue" />
+<rect x="210" y="184" width="20" height="32" rx="4" class="s-queue" />
+<rect x="234" y="184" width="20" height="32" rx="4" class="s-queue" />
+<rect x="258" y="184" width="20" height="32" rx="4" class="s-queue" />
+<rect x="282" y="184" width="16" height="32" rx="4" class="s-queue" />
+<text x="112" y="240" class="t-small">queue full (limit reached)</text>
+<rect x="330" y="184" width="20" height="32" rx="4" class="s-queue" />
+<text x="340" y="176" class="t-small t-mid">new</text>
+<path d="M340 220 V252" class="line" marker-end="url(#ah-5-2)" />
+<text x="390" y="272" class="t-small t-end">caller runs it, so intake slows</text>
+</svg>
+<figcaption><b>Figure 5.2</b> An unbounded queue hides overload until memory runs out. A bounded one pushes back on the caller right away.</figcaption>
+</figure>
+
+Give the default executor real limits in `application.yml`:
+
+<p class="code-title">application.yml</p>
+
+```yaml
+spring:
+  task:
+    execution:
+      pool:
+        core-size: 16
+        max-size: 32
+        queue-capacity: 500
+```
+
+With a bounded queue, something must happen when it is full. That is the <dfn>rejection policy</dfn>. The default throws a `TaskRejectedException`, which is the "Sorry, we're full" from Chapter 2.
+
+A gentler choice is `CallerRunsPolicy`: the thread that tried to submit the task runs it itself. That slows the caller down, which is exactly the backpressure you want.
+
+```java
+ex.setRejectedExecutionHandler(
+    new ThreadPoolExecutor.CallerRunsPolicy());
+```
+
+## 3. Lost exceptions
+
+A `CompletableFuture` keeps its exception inside itself. Nothing is thrown or logged unless someone calls `join()` or `get()`, or adds a handler like `exceptionally` or `whenComplete`.
+
+So a "fire and forget" task can fail every time, and the logs stay clean.
+
+<div class="compare">
+<div>
+<p class="compare-label bad">Failure vanishes</p>
+
+```java
+CompletableFuture.runAsync(
+    () -> audit.record(order),
+    auditExecutor);
+```
+
+</div>
+<div>
+<p class="compare-label good">Failure is logged</p>
+
+```java
+CompletableFuture.runAsync(
+    () -> audit.record(order),
+    auditExecutor)
+  .whenComplete((ok, ex) -> {
+      if (ex != null) log.error(
+          "Audit failed {}", order.id(), ex);
+  });
+```
+
+</div>
+</div>
+
+`@Async` methods have the same trap. If the method returns `void`, an exception goes to Spring's `AsyncUncaughtExceptionHandler`, which by default only logs it. If it returns a `CompletableFuture`, the exception sits inside that future until someone looks.
+
+## 4. Starvation and deadlock
+
+<dfn>Starvation</dfn> means a task is ready to run but never gets a thread. <dfn>Deadlock</dfn> is the worst case: tasks wait for each other in a circle, and nothing ever moves.
+
+The classic way to get there: a task running *in* a pool submits a child task *to the same pool*, then waits for it with `join()`. If every thread does that at once, every thread waits for a child stuck in the queue behind it.
+
+<p class="code-title">Don't: wait on your own pool</p>
+
+```java
+var report = CompletableFuture.supplyAsync(() -> {
+    var lines = CompletableFuture
+        .supplyAsync(() -> loadLines(id), pool)
+        .join();   // waits for a thread from its own pool
+    return new Report(lines);
+}, pool);
+```
+
+<Stepper>
+<figure class="fig stepper" id="fig-5-3">
+<svg viewBox="0 0 400 285" role="img" aria-labelledby="fig-5-3-t">
+<title id="fig-5-3-t">A pool of two threads: both parents wait for children that are stuck in the queue, so nothing runs.</title>
+<rect x="10" y="30" width="380" height="110" rx="6" class="box" />
+<text x="20" y="50" class="t-small t-muted">pool: 2 threads</text>
+<text x="20" y="81" class="t-mono t-small">pool-1</text>
+<text x="20" y="121" class="t-mono t-small">pool-2</text>
+<rect x="80" y="64" width="300" height="26" rx="6" class="box" />
+<rect x="80" y="104" width="300" height="26" rx="6" class="box" />
+<rect x="10" y="160" width="380" height="72" rx="6" class="box" />
+<text x="20" y="180" class="t-small t-muted">queue</text>
+<g data-only="1 2" class="is-off">
+<rect x="80" y="64" width="300" height="26" rx="6" class="s-work grow-x" />
+<text x="230" y="81" class="t-small t-mid">Parent A: build report</text>
+<rect x="80" y="104" width="300" height="26" rx="6" class="s-work grow-x" />
+<text x="230" y="121" class="t-small t-mid">Parent B: build report</text>
+</g>
+<g data-only="2 3" class="is-off">
+<rect x="30" y="192" width="160" height="28" rx="6" class="s-queue blink-in" />
+<text x="110" y="210" class="t-small t-mid">child a: loadLines</text>
+<rect x="210" y="192" width="160" height="28" rx="6" class="s-queue blink-in" />
+<text x="290" y="210" class="t-small t-mid">child b: loadLines</text>
+</g>
+<g data-only="3" class="is-off">
+<rect x="80" y="64" width="300" height="26" rx="6" class="s-bad pulse" />
+<text x="230" y="81" class="t-small t-mid">A: join() waits for child a</text>
+<rect x="80" y="104" width="300" height="26" rx="6" class="s-bad pulse" />
+<text x="230" y="121" class="t-small t-mid">B: join() waits for child b</text>
+<text x="200" y="258" class="t-bold t-mid c-bad">Stuck: no free thread, ever</text>
+</g>
+<g data-only="4">
+<rect x="80" y="64" width="300" height="26" rx="6" class="s-work grow-x" />
+<text x="230" y="81" class="t-small t-mid">child a: loadLines</text>
+<rect x="80" y="104" width="300" height="26" rx="6" class="s-work grow-x" />
+<text x="230" y="121" class="t-small t-mid">child b: loadLines</text>
+<text x="200" y="210" class="t-small t-mid t-muted">empty</text>
+<text x="200" y="258" class="t-bold t-mid c-work">Fix: parents hand back their thread</text>
+</g>
+</svg>
+<ol class="step-notes">
+<li>Two requests arrive at once. Parent A and Parent B each take one of the pool's two threads.</li>
+<li>Each parent submits a child task to the <em>same</em> pool. No thread is free, so both children wait in the queue.</li>
+<li>Each parent calls <code>join()</code> and waits for its child. The children wait for a thread. Nobody can move: deadlock.</li>
+<li>With <code>thenCompose</code>, a parent finishes its part and gives its thread back. The children can now run.</li>
+</ol>
+<figcaption><b>Figure 5.3</b> A pool that waits on itself. Real pools are bigger, so this hangs only under load, which is the worst time.</figcaption>
+</figure>
+</Stepper>
+
+Fixes, best first:
+
+- **Don't block inside a stage.** Chain with `thenCompose` instead of calling `join()` inside the lambda.
+- **Use separate pools** for the outer and the inner work.
+- **Use virtual threads**, where waiting doesn't hold a scarce pool thread ([Chapter 6](../threads-futures-queues-6-the-readable-way-virtual-threads/)).
+
+<p class="code-title">Do: compose, don't join</p>
+
+```java
+var report = CompletableFuture
+    .supplyAsync(() -> loadHeader(id), pool)
+    .thenCompose(h -> CompletableFuture
+        .supplyAsync(() -> loadLines(id), pool)
+        .thenApply(lines -> new Report(h, lines)));
+```
+
+## 5. Lost MDC and security context
+
+Spring keeps some per-request data in a <dfn>ThreadLocal</dfn>: a variable that belongs to *one thread*. You rely on two of them every day:
+
+- The logging **MDC**, which puts the trace id on every log line.
+- The **SecurityContext**, which knows who the current user is.
+
+When your code hops to another thread, those values stay behind. Log lines from the async task have no trace id, and `SecurityContextHolder.getContext()` comes back empty.
+
+<figure class="fig" id="fig-5-4">
+<svg viewBox="0 0 400 230" role="img" aria-labelledby="fig-5-4-t">
+<title id="fig-5-4-t">Without a task decorator the pool thread has no trace id or user. With one, the values are copied across.</title>
+<defs>
+<marker id="ah-5-4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" class="ah" />
+</marker>
+</defs>
+<text x="10" y="20" class="t-bold">Without a TaskDecorator</text>
+<rect x="10" y="32" width="160" height="66" rx="6" class="s-thread" />
+<text x="90" y="52" class="t-mono t-small t-mid">http-nio-8080-exec-3</text>
+<text x="90" y="72" class="t-small t-mid">traceId=7f3a</text>
+<text x="90" y="89" class="t-small t-mid">user=bryson</text>
+<path d="M174 65 H226" class="line" marker-end="url(#ah-5-4)" />
+<text x="200" y="56" class="t-small t-mid">hop</text>
+<rect x="230" y="32" width="160" height="66" rx="6" class="s-bad" />
+<text x="310" y="52" class="t-mono t-small t-mid">pricing-1</text>
+<text x="310" y="72" class="t-small t-mid c-bad">traceId=?</text>
+<text x="310" y="89" class="t-small t-mid c-bad">user=?</text>
+<text x="10" y="135" class="t-bold">With a TaskDecorator</text>
+<rect x="10" y="147" width="160" height="66" rx="6" class="s-thread" />
+<text x="90" y="167" class="t-mono t-small t-mid">http-nio-8080-exec-3</text>
+<text x="90" y="187" class="t-small t-mid">traceId=7f3a</text>
+<text x="90" y="204" class="t-small t-mid">user=bryson</text>
+<path d="M174 180 H226" class="line" marker-end="url(#ah-5-4)" />
+<text x="200" y="171" class="t-small t-mid">copy</text>
+<rect x="230" y="147" width="160" height="66" rx="6" class="s-work" />
+<text x="310" y="167" class="t-mono t-small t-mid">pricing-1</text>
+<text x="310" y="187" class="t-small t-mid">traceId=7f3a</text>
+<text x="310" y="204" class="t-small t-mid">user=bryson</text>
+</svg>
+<figcaption><b>Figure 5.4</b> Thread-local values stay on the thread that set them. A decorator copies them onto the pool thread for the life of the task.</figcaption>
+</figure>
+
+The fix is a <dfn>TaskDecorator</dfn>: a small wrapper that Spring runs around every task the executor accepts. It copies the values over before the task and cleans up after.
+
+Spring Framework 6.1+ ships `ContextPropagatingTaskDecorator`. It uses the Micrometer context-propagation library (add `io.micrometer:context-propagation`), so tracing context and MDC follow the task:
+
+<p class="code-title">ContextConfig.java</p>
+
+```java
+@Bean
+TaskDecorator contextPropagatingTaskDecorator() {
+    return new ContextPropagatingTaskDecorator();
+}
+```
+
+On Spring Boot 4.1 and later you can skip the bean and set one property instead:
+
+<p class="code-title">application.properties</p>
+
+```properties
+spring.task.execution.propagate-context=true
+```
+
+- Spring Boot applies `TaskDecorator` beans to the executor it auto-configures.
+- For your own pools, call `ex.setTaskDecorator(…)` on each `ThreadPoolTaskExecutor`.
+- For the logged-in user, Spring Security has `DelegatingSecurityContextAsyncTaskExecutor`, which wraps an executor and carries the `SecurityContext` across.
+
+A decorator only helps tasks that go *through* that executor. A `supplyAsync` with no executor lands on the common pool and gets nothing. One more reason to always pass the executor.
+
+## 6. No timeouts
+
+`join()` and `get()` with no arguments wait **forever**. If a downstream service hangs, your request thread hangs with it.
+
+Hang enough of them and Tomcat's 200 request threads are used up. Then the whole service stops answering, even requests that never touch the slow service.
+
+<p class="code-title">PriceService.java</p>
+
+```java
+var price = CompletableFuture
+    .supplyAsync(() -> pricingClient.fetch(sku),
+        pricingExecutor)
+    .completeOnTimeout(Price.unknown(), // (1)
+        800, MILLISECONDS);
+
+// or, to fail instead of falling back:
+// .orTimeout(800, MILLISECONDS) // (2)
+```
+
+<ol class="code-notes">
+<li>After 800&nbsp;ms the future completes with a fallback value.</li>
+<li>After 800&nbsp;ms the future fails with a <code>TimeoutException</code>.</li>
+</ol>
+
+Put timeouts in two places. On the **future**, so the caller stops waiting. And on the **client** (HTTP connect and read timeouts, a JDBC query timeout), so the thread doing the work also lets go.
+
+<aside class="callout watch">
+<p class="callout-title">Watch out</p>
+<p><code>orTimeout</code> and <code>completeOnTimeout</code> finish the <em>future</em>. They don't stop the work. The pool thread stays inside <code>pricingClient.fetch</code> until that call returns.</p>
+<p><code>cancel(true)</code> on a <code>CompletableFuture</code> doesn't interrupt the thread either. Only a timeout on the client itself frees that thread.</p>
+</aside>
+
+## A code review checklist
+
+When you read async code at work, ask these six questions:
+
+1. Does every `supplyAsync` / `runAsync` pass an executor?
+2. Does every pool limit both its threads *and* its queue?
+3. Does every future end in a `join`, a handler, or a log line?
+4. Does any task wait on another task in the same pool?
+5. Does the executor carry MDC and the security context?
+6. Does every remote call have a timeout?
+
+<aside class="callout why">
+<p class="callout-title">Why it matters</p>
+<p>At thousands of requests per second, a pitfall doesn't fail one request. It fails all of them together.</p>
+<p>One slow dependency, one shared pool and no timeout add up to a full outage. Separate bounded pools and a timeout on every remote call turn "everything is down" into "one feature is slow".</p>
+</aside>
+
+<aside class="callout recap">
+<p class="callout-title">Recap</p>
+<ol>
+<li>Never block on the common pool. Give blocking work its own bounded pool and always pass it in.</li>
+<li>Every future needs an ending (a join, a handler or a log) and every remote call needs a timeout.</li>
+<li>Context doesn't follow you to another thread by itself, and a pool must never wait on itself.</li>
+</ol>
+</aside>

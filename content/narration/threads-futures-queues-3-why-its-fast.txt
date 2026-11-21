@@ -1,0 +1,83 @@
+Why it's fast: waiting versus working. Part 3 of 8 of Threads, Futures and Queues.
+
+Concurrent code is not fast because the CPU works harder. It is fast because it stops waiting in a line. This chapter shows where the time in a request really goes, why three calls at once take as long as the slowest one, and the one formula that explains "thousands of requests per second".
+
+# Where the time really goes
+
+Take a typical endpoint in a business service. It reads from a database, calls one or two other services, and builds some JSON. Time it, and you find something like this:
+
+Figure: One 200 millisecond request: about 4 milliseconds of CPU work spread in small slivers, and the rest waiting on the database and two HTTP calls.
+
+During all that amber time, the thread is parked. The CPU core is free to run other threads. That is why a pool of 200 threads works on 4 cores (Chapter 1).
+
+But it also tells you where to look for speed. Making the green part faster barely matters. Shrinking or overlapping the amber part is where the wins are.
+
+In the kitchen: A cook puts a roast in the oven for 40 minutes. If the cook stands and stares at the oven, one dish takes 40 minutes of the cook's time. If the cook puts the roast in, starts the soup, and chops the salad while both cook, the whole meal is ready when the slowest thing is done. Same cook, same oven. Far less standing around.
+
+# The slowest call, not the sum
+
+Say the home page needs three things that don't depend on each other: the user's profile (120 milliseconds), their recent orders (200 milliseconds), and recommendations (80 milliseconds).
+
+Called one after another, the wait times add up: 120 + 200 + 80 = 400 milliseconds. Started at the same time, the waits overlap, and you are done when the slowest one is done: 200 milliseconds.
+
+Figure: Timeline comparing three calls made one after another, taking 400 milliseconds, with the same three calls made at the same time, taking 200 milliseconds.
+
+Here is the same service both ways. The parallel version uses CompletableFuture, which Chapter 4 reads line by line. For now, just notice the shape: start all three, then wait for all three.
+
+One after another ( about 400 milliseconds)
+
+The code here loads a home page by calling profile, recent orders and recommendations one after another.
+
+At the same time ( about 200 milliseconds)
+
+The same home page, now starting all three calls at once on an I/O pool and joining their results at the end.
+
+(supplyAsync is statically imported from CompletableFuture; ioPool is a bounded executor like the one in Chapter 2.)
+
+This only works for calls that are independent. If you need the profile's region before you can ask for recommendations, those two have to stay in order. Finding which calls are independent is the first step in reading or writing any concurrent code.
+
+# Parallel I O versus parallel CPU
+
+There are two very different kinds of "parallel", and they get mixed up a lot.
+
+I O-bound work (HTTP calls, DB queries, reading queues) is mostly waiting. You can overlap far more of it than you have cores, because waiting threads use no CPU. This is the kind that makes business services fast.
+
+CPU-bound work (parsing a huge file, image resizing, heavy math) keeps a core busy the whole time. Splitting it helps only up to the number of cores. 4 cores can do 4 CPU tasks at once; the 5th waits.
+
+Most code you'll see at work with CompletableFuture is the first kind: fan out a few remote calls, then combine.
+
+# The math of "thousands per second"
+
+Here is the one formula worth remembering. It is called Little's law, and in plain words it says:
+
+in progress at once = arrivals per second times seconds each one takes
+
+In the kitchen: if 60 orders come in per hour and each spends 10 minutes being cooked, then on average 60 times (10 or 60) = 10 orders are in the kitchen at any moment. If every order needs a cook for its whole 10 minutes, you need about 10 cooks.
+
+For a service: one instance gets 800 requests per second. Five instances behind a load balancer make that 4,000 per second, "thousands per second". Each request holds a Tomcat thread for its whole duration. So:
+
+Figure: At 800 requests per second, 0.4 second requests need 320 threads, more than Tomcat's 200, so 120 wait. At 0.2 seconds, only 160 are needed.
+
+You can use the same formula on every pool in the service:
+
+The table works through the formula for three pools: 800 requests a second held for 0.2 seconds keeps 160 Tomcat threads busy, the same rate held for 15 milliseconds keeps 12 database connections busy, more than Hikari's default of 10, and 300 Kafka messages a second at 50 milliseconds keeps 15 threads busy.
+
+These are averages. Real traffic comes in bursts, so leave headroom: a common rule of thumb is to size for your p99 latency, or 1.5 to 2 times the average. Chapter 7 shows how to watch the real numbers in production.
+
+Why it's fast:
+
+Waits overlap. Three 100 milliseconds waits done together take 100 milliseconds, not 300.
+
+Threads are freed sooner. A request that finishes in half the time holds its thread half as long, so the same pool serves twice the traffic (Little's law).
+
+The CPU never stands still. While one thread waits on the network, the core runs another one's green slice.
+
+Watch out: The parallel version uses more threads per request, not fewer. In the example each request now also has 3 calls running on the I O pool. By Little's law that pool has about 800 times (0.12 + 0.2 + 0.08) = 320 tasks in progress. So Tomcat needs fewer threads, but the I O pool needs a lot. Size it, bound it, and watch it, or you have just moved the pile-up. (Chapter 6 shows how virtual threads make this cost almost disappear.)
+
+Recap:
+
+1. Most request time is waiting on I O, not CPU work. Speed comes from overlapping the waits.
+
+2. Independent calls done at once take as long as the slowest one, not the sum.
+
+3. Little's law: in progress at once = rate times time. Halve the time and you halve the threads you need.

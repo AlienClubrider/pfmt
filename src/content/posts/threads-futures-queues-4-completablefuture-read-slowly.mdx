@@ -1,0 +1,412 @@
+---
+title: "CompletableFuture, read slowly"
+date: 2026-11-20
+category: tech
+series:
+  id: threads-futures-queues
+  title: "Threads, Futures and Queues"
+part: 4
+partsTotal: 8
+tags: ["java", "concurrency", "spring-boot", "completablefuture"]
+readingMinutes: 10
+summary: "This is the chapter for the code that confused you at work. We take CompletableFuture apart one method at a time, find out which thread runs each line, and then read a real-looking chain from top to bottom."
+---
+## A box that fills in later
+
+A <dfn>CompletableFuture&lt;T&gt;</dfn> is a box that will hold a `T` later. Right now it may be empty. At some point it gets filled with either a value or an error. That is all it is.
+
+You can do two things with the box:
+
+1. **Wait for it**: `join()` blocks the current thread until the box is filled.
+2. **Attach a next step**: "when this box is filled, run this function". The method returns a *new* box for the result of that step.
+
+Attaching steps to boxes, one after another, is what a "chain" is. Each line of a chain is a new box that depends on the box above it.
+
+<aside class="callout analogy">
+<p class="callout-title">In the kitchen</p>
+<p>At a burger counter you order, pay, and get a <strong>buzzer</strong>. The buzzer is the future: it is not your food, it is a promise of food. You can stand at the counter staring at it (<code>join()</code>), or leave instructions: "when it buzzes, add fries and bring it to table 6" (<code>thenApply</code>). Meanwhile, the counter is free to serve the next person.</p>
+</aside>
+
+<Stepper>
+<figure class="fig stepper" id="fig-4-1">
+<svg viewBox="0 0 400 270" role="img" aria-labelledby="fig-4-1-t">
+<title id="fig-4-1-t">A chain of three futures. Each box starts empty and fills when the one above it is done. On error, thenApply is skipped and exceptionally provides a fallback.</title>
+<defs>
+<marker id="ah-4-1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" class="ah" />
+</marker>
+</defs>
+<text x="20" y="44" class="t-mono">supplyAsync(loadCart)</text>
+<text x="20" y="60" class="t-small t-muted">CompletableFuture&lt;Cart&gt;</text>
+<text x="20" y="134" class="t-mono">.thenApply(Cart::total)</text>
+<text x="20" y="150" class="t-small t-muted">CompletableFuture&lt;Money&gt;</text>
+<text x="20" y="224" class="t-mono">.exceptionally(ex -&gt; ZERO)</text>
+<text x="20" y="240" class="t-small t-muted">CompletableFuture&lt;Money&gt;</text>
+<path d="M315 68 V112" class="line" marker-end="url(#ah-4-1)" />
+<path d="M315 158 V202" class="line" marker-end="url(#ah-4-1)" />
+<rect x="250" y="30" width="130" height="38" rx="8" class="line-soft" />
+<rect x="250" y="120" width="130" height="38" rx="8" class="line-soft" />
+<rect x="250" y="210" width="130" height="38" rx="8" class="line-soft" />
+<text x="315" y="54" class="t-mid t-muted is-off" data-only="1">empty</text>
+<text x="315" y="144" class="t-mid t-muted is-off" data-only="1 2 4">empty</text>
+<text x="315" y="234" class="t-mid t-muted is-off" data-only="1 2">empty</text>
+<text x="315" y="234" class="t-mid t-muted is-off" data-only="4">…</text>
+<g data-only="2 3" class="is-off">
+<rect x="250" y="30" width="130" height="38" rx="8" class="s-work blink-in" />
+<text x="315" y="54" class="t-mid">Cart #42</text>
+</g>
+<g data-only="3" class="is-off">
+<rect x="250" y="120" width="130" height="38" rx="8" class="s-work blink-in" />
+<text x="315" y="144" class="t-mid">$84.20</text>
+</g>
+<g data-only="3" class="is-off">
+<rect x="250" y="210" width="130" height="38" rx="8" class="s-work blink-in" />
+<text x="315" y="234" class="t-mid">$84.20</text>
+<text x="380" y="264" class="t-small t-muted t-end">no error: value passes through</text>
+</g>
+<g data-only="4 5">
+<rect x="250" y="30" width="130" height="38" rx="8" class="s-bad blink-in" />
+<text x="315" y="54" class="t-mid c-bad t-bold">error</text>
+</g>
+<g data-only="5">
+<rect x="250" y="120" width="130" height="38" rx="8" class="s-bad" />
+<text x="315" y="144" class="t-mid c-bad">error (skipped)</text>
+</g>
+<g data-only="5">
+<rect x="250" y="210" width="130" height="38" rx="8" class="s-work blink-in" />
+<text x="315" y="234" class="t-mid">ZERO (fallback)</text>
+</g>
+</svg>
+<ol class="step-notes">
+<li>Building the chain returns three boxes straight away. All empty. Nothing has waited yet.</li>
+<li>A pool thread finishes loading the cart. Box 1 fills. That triggers the step attached to it.</li>
+<li><code>thenApply</code> runs <code>Cart::total</code> and fills box 2. <code>exceptionally</code> has nothing to recover, so the value passes straight through to box 3.</li>
+<li>Now the error path, from the start: loading the cart throws. Box 1 is filled with the <em>error</em> instead of a value.</li>
+<li>An error skips every normal step (<code>thenApply</code> never runs) until it reaches an error handler. <code>exceptionally</code> turns it into a fallback value.</li>
+</ol>
+<figcaption><b>Figure 4.1</b> A chain is a column of boxes. Values flow down through the normal steps; errors flow down past them to the first handler.</figcaption>
+</figure>
+</Stepper>
+
+## Starting work: `supplyAsync`
+
+Most chains begin with `supplyAsync`: "run this function on another thread, and give me a box for its result".
+
+```java
+CompletableFuture<Cart> cartF =
+        CompletableFuture.supplyAsync(() -> carts.load(cartId), ioPool);
+```
+
+The call returns immediately with an empty box. A thread from `ioPool` runs `carts.load` and fills the box later. `runAsync` is the same for work that returns nothing.
+
+Note the second argument, `ioPool`. It is optional, and leaving it out is the most common mistake with this API. More on that in [the common pool trap](#the-common-pool-trap).
+
+A `CompletableFuture` can also come from a library instead: Spring's `@Async` methods ([Chapter 2](../threads-futures-queues-2-pools-and-queues/#springs-async-and-its-executor)), the JDK's `HttpClient.sendAsync`, or `WebClient … .toFuture()`. They all give you the same kind of box.
+
+## The verbs, in plain words
+
+The API has over 50 methods, but you only meet about ten. Each one answers "what should happen when the box above is filled?"
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Method</th><th>Plain words</th><th>Stream cousin</th></tr>
+</thead>
+<tbody>
+<tr><td><code>thenApply(f)</code></td><td>Change the value: <code>T → U</code>.</td><td><code>map</code></td></tr>
+<tr><td><code>thenCompose(f)</code></td><td>Next step is <em>another async call</em>: <code>T → future of U</code>.</td><td><code>flatMap</code></td></tr>
+<tr><td><code>thenCombine(other, f)</code></td><td>Wait for this <em>and</em> another box, then merge both values.</td><td><code>zip</code></td></tr>
+<tr><td><code>thenAccept(f)</code></td><td>Use the value, return nothing.</td><td><code>forEach</code></td></tr>
+<tr><td><code>allOf(a, b, c)</code></td><td>A box that fills when <em>all</em> of them are filled. Holds no value itself.</td><td></td></tr>
+<tr><td><code>anyOf(a, b, c)</code></td><td>Fills with whichever finishes first.</td><td></td></tr>
+<tr><td><code>exceptionally(f)</code></td><td>On error, turn the error into a value. On success, pass through.</td><td></td></tr>
+<tr><td><code>handle(f)</code></td><td>Always runs, gets <code>(value, error)</code>, returns a new value.</td><td></td></tr>
+<tr><td><code>whenComplete(f)</code></td><td>Always runs, looks at <code>(value, error)</code>, changes nothing. For logging.</td><td><code>peek</code></td></tr>
+<tr><td><code>orTimeout(t, unit)</code></td><td>If not filled in time, fill with a <code>TimeoutException</code>.</td><td></td></tr>
+<tr><td><code>join()</code> / <code>get()</code></td><td>Block this thread until filled. Not a step: it ends the chain.</td><td></td></tr>
+</tbody>
+</table>
+</div>
+
+Every `then…` method also has an `…Async` twin, like `thenApplyAsync`. Same job; the difference is *which thread* runs it. That gets its own section below.
+
+## `thenApply` vs `thenCompose`
+
+This pair confuses everyone once. The rule: look at what your function returns.
+
+- It returns a plain value (`user.name()`)? Use `thenApply`.
+- It returns *another future* (an async call)? Use `thenCompose`.
+
+<p class="code-title">the rule in code</p>
+
+```java
+// function returns a value: thenApply
+CompletableFuture<String> name =
+        userF.thenApply(user -> user.name());
+
+// function returns a future: thenCompose
+CompletableFuture<Address> address =
+        userF.thenCompose(user -> addressClient.lookup(user.id()));
+
+// wrong verb: a box inside a box
+CompletableFuture<CompletableFuture<Address>> oops =
+        userF.thenApply(user -> addressClient.lookup(user.id()));
+```
+
+<figure class="fig" id="fig-4-2">
+<svg viewBox="0 0 400 200" role="img" aria-labelledby="fig-4-2-t">
+<title id="fig-4-2-t">thenApply with an async function gives a future inside a future. thenCompose flattens it into one future of Address.</title>
+<text x="100" y="26" class="t-mono t-mid">thenApply</text>
+<text x="100" y="44" class="t-small t-mid c-bad">box in a box</text>
+<rect x="20" y="56" width="160" height="110" rx="10" class="s-bad" />
+<text x="32" y="76" class="t-small c-bad">CompletableFuture&lt;</text>
+<rect x="40" y="88" width="120" height="58" rx="8" class="box" />
+<text x="50" y="106" class="t-small t-muted">CompletableFuture&lt;</text>
+<rect x="62" y="114" width="76" height="24" rx="5" class="s-work" />
+<text x="100" y="131" class="t-mid t-small">Address</text>
+<text x="100" y="186" class="t-small t-mid t-muted">must unwrap twice</text>
+<text x="300" y="26" class="t-mono t-mid">thenCompose</text>
+<text x="300" y="44" class="t-small t-mid c-work">flat</text>
+<rect x="220" y="86" width="160" height="58" rx="10" class="s-work" />
+<text x="232" y="106" class="t-small c-work">CompletableFuture&lt;</text>
+<rect x="262" y="114" width="76" height="24" rx="5" class="box" />
+<text x="300" y="131" class="t-mid t-small">Address</text>
+<text x="300" y="186" class="t-small t-mid t-muted">one box, keep chaining</text>
+</svg>
+<figcaption><b>Figure 4.2</b> If the next step is itself asynchronous, <code>thenCompose</code> waits for its inner box too and gives you one flat box.</figcaption>
+</figure>
+
+## Waiting for two, or for many
+
+**Two independent things**: start both, then merge with `thenCombine`. This is the "latency = slowest call" trick from [Chapter 3](../threads-futures-queues-3-why-its-fast/#the-slowest-call-not-the-sum).
+
+```java
+var profileF = supplyAsync(() -> profiles.get(id), ioPool);
+var ordersF  = supplyAsync(() -> orders.recent(id), ioPool);
+
+CompletableFuture<AccountPage> page =
+        profileF.thenCombine(ordersF, AccountPage::new);
+```
+
+**A list of things**: start one future per item, wait for all with `allOf`, then read each result. `allOf` gives you a `CompletableFuture<Void>`, so the values come from the original futures. Calling `join()` on them after `allOf` is done does not wait at all.
+
+```java
+List<CompletableFuture<Price>> futures = skus.stream()
+        .map(sku -> supplyAsync(() -> pricing.price(sku), ioPool))
+        .toList();
+
+CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+        .join(); // wait for every price
+
+List<Price> prices = futures.stream()
+        .map(CompletableFuture::join) // already done, no waiting
+        .toList();
+```
+
+## When something fails
+
+If a step throws, its box is filled with the error. As Figure 4.1 showed, the error then skips every normal step below until it meets a handler:
+
+```java
+CompletableFuture<Quote> quote = pricing.quote(cart)
+        .exceptionally(ex -> Quote.unavailable())   // error → value
+        .whenComplete((q, ex) -> metrics.record(q)); // look only
+
+CompletableFuture<Quote> same = pricing.quote(cart)
+        .handle((q, ex) -> ex == null ? q : Quote.unavailable());
+```
+
+Two details that trip people up:
+
+- **The error is often wrapped.** If a step throws inside a chain, later steps see a `CompletionException` with your real exception inside as the *cause*. Check `ex.getCause()` before deciding what went wrong.
+- **`join()` vs `get()`**. Both block. `join()` throws an unchecked `CompletionException`; `get()` throws a checked `ExecutionException` (and `InterruptedException`). Same cause inside either way.
+
+<aside class="callout watch">
+<p class="callout-title">Watch out</p>
+<p>A chain with no <code>exceptionally</code>, <code>handle</code> or <code>join()</code> at the end <strong>swallows its errors</strong>. Nobody looks inside the box, so the exception is never logged. If you see a chain that is started and then dropped (fire and forget), make sure it ends with a handler that at least logs. Chapter 5 has more of these traps.</p>
+</aside>
+
+## Which thread runs what
+
+This is the part nobody tells you, and it decides whether a chain is safe. The rules:
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>You wrote</th><th>The function runs on</th></tr>
+</thead>
+<tbody>
+<tr><td><code>supplyAsync(f, pool)</code></td><td>a thread from <code>pool</code></td></tr>
+<tr><td><code>supplyAsync(f)</code></td><td><code>ForkJoinPool.commonPool()</code> (see below)</td></tr>
+<tr><td><code>thenApply(f)</code> (no Async)</td><td>whichever thread <em>filled the box above</em>; or, if it was already filled, the thread that called <code>thenApply</code></td></tr>
+<tr><td><code>thenApplyAsync(f, pool)</code></td><td>a thread from <code>pool</code></td></tr>
+<tr><td><code>thenApplyAsync(f)</code></td><td>the common pool</td></tr>
+<tr><td><code>join()</code></td><td>blocks the thread that calls it</td></tr>
+</tbody>
+</table>
+</div>
+
+The non-Async steps are the slippery ones: you can't tell from the code which thread runs them. That's fine for quick transforms like `Cart::total`. It's not fine for anything slow or blocking. If a step does I/O, give it an executor: `thenApplyAsync(f, ioPool)`.
+
+<Stepper>
+<figure class="fig stepper" id="fig-4-3">
+<svg viewBox="0 0 400 270" role="img" aria-labelledby="fig-4-3-t">
+<title id="fig-4-3-t">Thread lanes for a request that starts two async calls, combines them, and joins: the combine step runs on the I/O thread that finished last.</title>
+<defs>
+<pattern id="hatch-4-3" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<rect width="2.5" height="6" class="f-wait" opacity=".45" />
+</pattern>
+</defs>
+<text x="20" y="62" class="t-mono t-small">exec-1</text>
+<text x="20" y="128" class="t-mono t-small">io-1</text>
+<text x="20" y="194" class="t-mono t-small">io-2</text>
+<path d="M80 58 H384 M80 124 H384 M80 190 H384" class="line-soft" />
+<g data-step="1">
+<rect x="80" y="46" width="22" height="24" rx="3" class="f-work grow-x" />
+<text x="80" y="36" class="t-small">2× supplyAsync</text>
+</g>
+<g data-step="2">
+<rect x="102" y="112" width="120" height="24" rx="3" class="s-wait grow-x" />
+<rect x="102" y="112" width="120" height="24" rx="3" class="hatch" fill="url(#hatch-4-3)" />
+<text x="162" y="128" class="t-small t-mid">profile HTTP</text>
+<rect x="102" y="178" width="200" height="24" rx="3" class="s-wait grow-x" />
+<rect x="102" y="178" width="200" height="24" rx="3" class="hatch" fill="url(#hatch-4-3)" />
+<text x="202" y="194" class="t-small t-mid">orders HTTP</text>
+<rect x="102" y="46" width="200" height="24" rx="3" class="s-wait grow-x" />
+<text x="202" y="62" class="t-small t-mid">join(): waiting</text>
+</g>
+<g data-step="3">
+<rect x="302" y="178" width="30" height="24" rx="3" class="f-queue blink-in" />
+<text x="317" y="224" class="t-small t-mid c-queue t-bold">combine runs</text>
+<text x="317" y="238" class="t-small t-mid c-queue">here, on io-2</text>
+</g>
+<g data-step="4">
+<rect x="332" y="46" width="44" height="24" rx="3" class="f-work grow-x" />
+<text x="354" y="36" class="t-small t-mid">response</text>
+</g>
+<text x="384" y="262" class="t-small t-muted t-end">time →</text>
+</svg>
+<ol class="step-notes">
+<li>The Tomcat thread <code>exec-1</code> calls <code>supplyAsync</code> twice. Each call returns at once; it only hands the work to <code>ioPool</code>.</li>
+<li><code>io-1</code> and <code>io-2</code> make their HTTP calls at the same time. <code>exec-1</code> reaches <code>join()</code> and blocks, waiting for the combined box.</li>
+<li>Profile finished first. Orders finishes last, on <code>io-2</code>, so the <code>thenCombine</code> function runs right there, on <code>io-2</code>. Nobody wrote "io-2" in the code; it is simply the thread that filled the last box.</li>
+<li>The combined box is filled. <code>exec-1</code> wakes up from <code>join()</code> and writes the response.</li>
+</ol>
+<figcaption><b>Figure 4.3</b> Non-Async steps hitch a ride on whichever thread finishes the step before them. Read the lanes, not just the code.</figcaption>
+</figure>
+</Stepper>
+
+<aside class="callout note">
+<p class="callout-title">Freeing the Tomcat thread too</p>
+<p>In Figure 4.3, <code>exec-1</code> still waits during <code>join()</code>. Spring MVC lets a controller return the <code>CompletableFuture</code> itself instead. Then Tomcat's thread is released straight away and the response is written when the box fills. That saves Tomcat threads, at the cost of code that is harder to follow. Chapter 6 shows a simpler way to get the same benefit.</p>
+</aside>
+
+## The common pool trap
+
+Leave out the executor (`supplyAsync(f)`, `thenApplyAsync(f)`) and the work runs on `ForkJoinPool.commonPool()`. Three facts about that pool:
+
+1. It is **shared by the whole JVM**: parallel streams, other libraries, every other future without an executor.
+2. It is **small**: by default, one thread fewer than the number of CPUs. A 4-CPU container gets 3 threads.
+3. It was **designed for CPU work**, not for waiting on HTTP or databases.
+
+So a handful of slow HTTP calls without an executor can block all of its threads, and every other user of the pool stalls behind them.
+
+<figure class="fig" id="fig-4-4">
+<svg viewBox="0 0 400 250" role="img" aria-labelledby="fig-4-4-t">
+<title id="fig-4-4-t">The common pool with 3 threads, all stuck on slow HTTP calls, while parallel stream work and other futures queue up behind them.</title>
+<defs>
+<pattern id="hatch-4-4" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<rect width="2.5" height="6" class="f-wait" opacity=".45" />
+</pattern>
+</defs>
+<text x="20" y="26" class="t-bold">ForkJoinPool.commonPool()</text>
+<text x="20" y="44" class="t-small t-muted">4 CPUs → 3 threads, shared by everything</text>
+<rect x="20" y="56" width="200" height="132" rx="8" class="box" />
+<g class="pulse">
+<rect x="32" y="68" width="176" height="30" rx="5" class="s-wait" />
+<rect x="32" y="68" width="176" height="30" rx="5" class="hatch" fill="url(#hatch-4-4)" />
+<rect x="32" y="106" width="176" height="30" rx="5" class="s-wait" />
+<rect x="32" y="106" width="176" height="30" rx="5" class="hatch" fill="url(#hatch-4-4)" />
+<rect x="32" y="144" width="176" height="30" rx="5" class="s-wait" />
+<rect x="32" y="144" width="176" height="30" rx="5" class="hatch" fill="url(#hatch-4-4)" />
+</g>
+<text x="120" y="88" class="t-mid t-small">worker-1: HTTP, 2 s</text>
+<text x="120" y="126" class="t-mid t-small">worker-2: HTTP, 2 s</text>
+<text x="120" y="164" class="t-mid t-small">worker-3: HTTP, 2 s</text>
+<text x="236" y="26" class="t-bold c-bad">Stuck waiting</text>
+<rect x="236" y="56" width="144" height="26" rx="5" class="s-bad" />
+<text x="308" y="73" class="t-mid t-small">parallelStream()</text>
+<rect x="236" y="88" width="144" height="26" rx="5" class="s-bad" />
+<text x="308" y="105" class="t-mid t-small">another service's future</text>
+<rect x="236" y="120" width="144" height="26" rx="5" class="s-bad" />
+<text x="308" y="137" class="t-mid t-small">a library's async task</text>
+<rect x="236" y="152" width="144" height="26" rx="5" class="s-bad" />
+<text x="308" y="169" class="t-mid t-small">…</text>
+<text x="20" y="218">Fix: always pass your own bounded executor:</text>
+<text x="20" y="238" class="t-mono">supplyAsync(() -&gt; call(), ioPool)</text>
+</svg>
+<figcaption><b>Figure 4.4</b> Three slow HTTP calls are enough to freeze everything else that relies on the common pool, including code that has nothing to do with yours.</figcaption>
+</figure>
+
+One more surprise: if the machine has so few CPUs that the common pool would get *fewer than two* threads, `CompletableFuture` doesn't use it at all. It starts a **brand-new thread for every task** instead. On a 1 or 2 CPU container, that is an unbounded number of threads. Your thread count graph will show it.
+
+## Reading a real chain, top to bottom
+
+Here is the kind of code you might meet at work. A checkout page needs the cart's price quote with the customer's loyalty points applied, within 800 ms, or a fallback.
+
+<p class="code-title">CheckoutSummaryService.java</p>
+
+```java
+CompletableFuture<CheckoutSummary> summary(long cartId) {
+    var pointsF = supplyAsync(                          // (1)
+            () -> loyalty.points(cartId), ioPool);
+
+    return supplyAsync(() -> carts.load(cartId), ioPool) // (2)
+            .thenCompose(cart -> pricing.quote(cart))    // (3)
+            .thenCombine(pointsF, Quote::withPoints)     // (4)
+            .thenApply(CheckoutSummary::from)            // (5)
+            .orTimeout(800, MILLISECONDS)                // (6)
+            .exceptionally(ex -> {                       // (7)
+                log.warn("summary failed for {}", cartId, ex);
+                return CheckoutSummary.unavailable(cartId);
+            });
+}
+```
+
+<ol class="code-notes">
+<li><strong>Starts now.</strong> The loyalty call begins on an <code>ioPool</code> thread the moment <code>summary()</code> is called. It runs in parallel with everything below.</li>
+<li><strong>Also starts now</strong>, on another <code>ioPool</code> thread: load the cart. Steps 1 and 2 are the "fan out".</li>
+<li><code>thenCompose</code>: once the cart is loaded, ask pricing for a quote. <code>pricing.quote</code> is itself async (returns a future), so this is <code>thenCompose</code>, not <code>thenApply</code>. Runs on the thread that loaded the cart.</li>
+<li><code>thenCombine</code>: wait for the quote <em>and</em> the points from step 1, then apply the points. Runs on whichever of the two finished last.</li>
+<li><code>thenApply</code>: a quick, pure transform into the response type. Same thread as step 4.</li>
+<li><code>orTimeout</code>: if the whole chain above isn't done within 800 ms, fill the box with a <code>TimeoutException</code>. Note: this does <em>not</em> stop the calls that are still running; it only stops waiting for them.</li>
+<li><code>exceptionally</code>: any error above (cart, pricing, loyalty or timeout) lands here. Errors from earlier steps arrive wrapped in a <code>CompletionException</code>; the timeout arrives as a plain <code>TimeoutException</code>. Log it and return a fallback, so the caller always gets a value. On a timeout this runs on the JDK's internal timer thread, which is one more reason to keep handlers short.</li>
+</ol>
+
+Total time: roughly the slower of "cart then quote" and "points", capped at 800 ms. Without futures it would be cart + quote + points, uncapped.
+
+### A reading routine
+
+Here is the routine you just used, as five questions. [Chapter 8](../threads-futures-queues-8-cheat-sheet/#read-async-code-in-five-steps) keeps it on one page for work.
+
+<ol class="steps">
+<li><strong>Where does work leave this thread?</strong> Look for <code>supplyAsync</code>, <code>runAsync</code>, <code>@Async</code>, and methods that return a future. Above: steps 1 and 2 (and the pricing client's own async call in step 3). Everything started before something is waited on runs at the same time.</li>
+<li><strong>Who runs it?</strong> Name the executor for each start. Above: <code>ioPool</code> every time. No executor means the common pool.</li>
+<li><strong>Read the chain in plain words.</strong> One line, one "and when that's done…". <code>thenCompose</code> = another async call; <code>thenCombine</code> / <code>allOf</code> = waiting for things started earlier.</li>
+<li><strong>How does it end, and what if it fails?</strong> Find the handler and the timeout, and who receives the box (here: the caller). No handler means silent failures; no timeout means a stuck call holds threads forever. Every <code>join()</code> or <code>get()</code> parks a thread: ask which one.</li>
+<li><strong>What are the limits?</strong> The size of <code>ioPool</code> and its queue, the pricing client's connection pool, the database pool. The smallest one decides how many of these can really run at once.</li>
+</ol>
+
+<aside class="callout why">
+<p class="callout-title">Why it matters</p>
+<p>A chain is a recipe for overlapping waits without dedicating a thread to each wait. That is how the 400 ms page from Chapter 3 becomes 200 ms. Once you can name the thread for every line, the scary-looking code turns into a list of "start this, then when it's done, do that".</p>
+</aside>
+
+<aside class="callout recap">
+<p class="callout-title">Recap</p>
+<ol>
+<li>A <code>CompletableFuture</code> is a box that fills later with a value or an error; each chained step makes a new box.</li>
+<li><code>thenApply</code> for plain values, <code>thenCompose</code> for async calls, <code>thenCombine</code> / <code>allOf</code> to wait for several, <code>exceptionally</code> / <code>handle</code> for errors.</li>
+<li>Always pass your own executor. Without one you share the small common pool with the whole JVM.</li>
+</ol>
+</aside>
