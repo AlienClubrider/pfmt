@@ -1,0 +1,11 @@
+---
+import TopicPage from '../components/TopicPage.astro';
+import { CATEGORIES, type Category } from '../lib/posts';
+import { allPosts } from '../lib/site';
+export function getStaticPaths() {
+  return Object.keys(CATEGORIES).map(topic => ({ params: { topic } }));
+}
+const topic = Astro.params.topic as Category;
+const posts = (await allPosts()).filter(p => p.data.category === topic);
+---
+<TopicPage topic={topic} posts={posts} />

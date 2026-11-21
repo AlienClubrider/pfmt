@@ -1,0 +1,20 @@
+---
+import TopicTag from './TopicTag.astro';
+import ListenButton from './ListenButton.astro';
+import CoverArt from './CoverArt.astro';
+import { postUrl, type PostEntry } from '../lib/site';
+import { formatDate } from '../lib/posts';
+interface Props { post: PostEntry }
+const { post } = Astro.props;
+const d = post.data, href = postUrl(post);
+---
+<article class={`card cat-${d.category}`}>
+  <a class="cover" href={href} tabindex="-1" aria-hidden="true"><CoverArt post={post} /></a>
+  <div class="body">
+    <TopicTag post={post} />
+    <h3><a href={href}>{d.title}</a></h3>
+    <p>{d.summary}</p>
+    <div class="meta"><span>{formatDate(d.date)}</span><span>{d.readingMinutes} min read</span></div>
+    <div class="foot-row"><ListenButton post={post} /></div>
+  </div>
+</article>

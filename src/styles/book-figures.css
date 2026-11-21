@@ -47,8 +47,8 @@
 /* Code colours (Shiki css-variables theme, set in astro.config.mjs). The books' palette, minus purple. */
 :root {
   --shiki-foreground: var(--text); --shiki-background: var(--bg-2);
-  --shiki-token-comment: #7d776b; --shiki-token-keyword: #0b6b6b; --shiki-token-string: #3f7d2e;
-  --shiki-token-string-expression: #3f7d2e; --shiki-token-constant: #9a5b00; --shiki-token-function: #2858c7;
+  --shiki-token-comment: #6a6458; --shiki-token-keyword: #0b6b6b; --shiki-token-string: #366b27;
+  --shiki-token-string-expression: #366b27; --shiki-token-constant: #9a5b00; --shiki-token-function: #2858c7;
   --shiki-token-parameter: var(--text); --shiki-token-punctuation: var(--muted); --shiki-token-link: var(--link);
 }
 :root[data-theme="dark"] {

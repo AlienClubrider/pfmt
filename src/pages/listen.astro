@@ -1,0 +1,76 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CoverArt from '../components/CoverArt.astro';
+import { CATEGORIES, partLabel } from '../lib/posts';
+import { allPosts, audioOf, postUrl, url } from '../lib/site';
+const eps = (await allPosts()).filter(p => audioOf(p.id));
+const hours = Math.round(eps.reduce((t, p) => t + audioOf(p.id)!.seconds, 0) / 360) / 10;
+---
+<BaseLayout title="Listen" page="listen" description="Every post, read aloud, in order. Press play once and it carries on to the next.">
+  <div class="wrap" style="max-width:860px">
+    <header class="page-head"><span class="eyebrow-label">Listen</span><h1>The blog, read aloud</h1>
+      <p>Every post in order. Press play once and it carries on to the next one. A series plays in order, Part 1 to the end. Your place is remembered on this device.</p></header>
+    {eps.length > 0 ? (
+      <>
+        <section class="now" id="now" aria-live="polite"></section>
+        <div class="sec-head"><h2>Episodes</h2><span class="more" style="color:var(--faint);font-weight:500">{eps.length} episodes · {hours} hours</span></div>
+        <ol class="eps" id="eps">
+          {eps.map((p, n) => {
+            const a = audioOf(p.id)!;
+            return (
+              <li class={`ep cat-${p.data.category}`} data-ep={p.id}>
+                <span class="num">{n + 1}</span>
+                <div class="art"><CoverArt post={p} square /></div>
+                <div><a href={postUrl(p)} style="color:inherit"><b>{p.data.title}</b></a>
+                  <small><span style="color:var(--cc);font-weight:650">{p.data.series ? p.data.series.title : CATEGORIES[p.data.category].name}</span><span>{Math.max(1, Math.round(a.seconds / 60))} min{p.data.series ? ` · ${partLabel(p.data)}` : ''}</span><span class="st"></span></small></div>
+                <button class="pbtn sm" type="button" data-play={p.id} aria-label={`Play ${p.data.title}`}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5Z" /></svg></button>
+              </li>
+            );
+          })}
+        </ol>
+      </>
+    ) : (
+      <section class="soon"><h2>The first episodes are on their way</h2><p>Every post is being read aloud. Check back soon.</p></section>
+    )}
+    <div class="sec-head"><h2>In your podcast app</h2></div>
+    <p style="color:var(--muted);margin:-8px 0 18px;max-width:40rem">The same episodes as a podcast feed, so they keep playing with the screen off and in CarPlay or Android Auto. Copy the feed link into any podcast app.</p>
+    <div class="rss"><a class="btn" href={url('podcast.xml')}><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19a1 1 0 1 0 0-.01M5 11a8 8 0 0 1 8 8M5 5a14 14 0 0 1 14 14" /></svg>Podcast feed</a></div>
+  </div>
+</BaseLayout>
+<script>
+  import { player as P } from '../scripts/player';
+  const PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5Z"/></svg>';
+  const PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4.5" width="4.2" height="15" rx="1"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1"/></svg>';
+  const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+  function draw() {
+    const now = document.getElementById('now'); if (!now) return;
+    const items = [...document.querySelectorAll<HTMLElement>('[data-ep]')];
+    const curId = P.st.cur && P.byId(P.st.cur) ? P.st.cur : items[0]?.dataset.ep;
+    const it = curId && P.byId(curId); if (!it) return;
+    const on = P.playing() && P.st.cur === it.id, pos = P.pos(it.id), pct = pos / it.seconds * 100, n = P.nextOf(it.id);
+    const tag = document.querySelector(`[data-ep="${it.id}"] small span`)?.textContent ?? '';
+    now.className = `now cat-${it.cat}`;
+    now.innerHTML = `<div class="cover">${document.querySelector(`[data-ep="${it.id}"] .art`)?.innerHTML ?? ''}</div><div>
+      <span class="tag">${esc(tag)}</span><h2>${esc(it.title)}</h2>
+      <p class="resume-note">${pos > 0 ? `${on ? 'Playing' : 'You stopped'} at ${P.fmt(pos)} · ${P.fmt((it.seconds - pos) / P.st.speed)} left` : `${Math.round(it.seconds / 60)} min`}${n ? ` · then ${esc(n.title)}` : ''}</p></div>
+      <div class="playbox" style="grid-column:1/-1"><div class="bar"><i style="width:${pct}%"></i><b style="left:${pct}%"></b></div>
+      <div class="times"><span>${P.fmt(pos)}</span><span>${P.fmt(it.seconds)}</span></div>
+      <div class="controls"><button class="icon-btn" data-rew aria-label="Back 15 seconds"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/><text x="12" y="15.2" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="system-ui" font-weight="700">15</text></svg></button>
+        <button class="pbtn" data-play="${it.id}" aria-label="${on ? 'Pause' : 'Play'}">${on ? PAUSE : PLAY}</button>
+        <button class="icon-btn" data-fwd aria-label="Forward 30 seconds"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4h-4"/><text x="12" y="15.2" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="system-ui" font-weight="700">30</text></svg></button>
+        <div class="speeds" role="group" aria-label="Speed">${[1, 1.25, 1.5, 2].map(s => `<button data-set-speed="${s}" class="${P.st.speed === s ? 'on' : ''}" aria-pressed="${P.st.speed === s}">${s}×</button>`).join('')}</div></div>
+      <div class="opts"><label><button class="toggle ${P.st.auto ? 'on' : ''}" data-auto role="switch" aria-checked="${P.st.auto}" aria-label="Play next automatically"></button>Play next automatically</label></div></div>`;
+    items.forEach(li => {
+      const id = li.dataset.ep!, pr = P.progress(id);
+      li.classList.toggle('playing', P.st.cur === id && P.playing());
+      li.classList.toggle('done', pr >= 0.99);
+      const st = li.querySelector('.st')!;
+      st.className = 'st state';
+      st.textContent = P.st.cur === id && P.playing() ? 'Playing' : pr >= 0.99 ? 'Played' : pr > 0.01 ? `${P.fmt(P.pos(id))} in` : '';
+      const b = li.querySelector<HTMLButtonElement>('button[data-play]')!;
+      b.innerHTML = P.st.cur === id && P.playing() ? PAUSE : PLAY;
+    });
+  }
+  document.addEventListener('pfmt:player', draw);
+  document.addEventListener('astro:page-load', draw);
+</script>

@@ -1,0 +1,8 @@
+---
+import { coverSvg } from '../lib/covers';
+import type { PostEntry } from '../lib/site';
+interface Props { post: PostEntry; square?: boolean }
+const { post, square = false } = Astro.props;
+const d = post.data;
+---
+<Fragment set:html={coverSvg({ cover: d.cover, category: d.category, seed: d.part ?? 0, square })} />

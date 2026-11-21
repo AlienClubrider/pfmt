@@ -1,0 +1,61 @@
+---
+import { render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Icon from '../../components/Icon.astro';
+import TopicTag from '../../components/TopicTag.astro';
+import ListenButton from '../../components/ListenButton.astro';
+import SeriesNav from '../../components/SeriesNav.astro';
+import { CATEGORIES, formatDate, neighbours, seriesParts, partLabel, type Post } from '../../lib/posts';
+import { allPosts, audioOf, postUrl, url, SITE, type PostEntry } from '../../lib/site';
+import Stepper from '../../components/Stepper.astro';
+import '../../styles/book-figures.css';
+
+export async function getStaticPaths() {
+  const posts = await allPosts();
+  return posts.map(post => ({ params: { slug: post.id }, props: { post } }));
+}
+const { post } = Astro.props as { post: PostEntry };
+const posts = await allPosts();
+const P = posts as unknown as Post[];
+const d = post.data;
+const parts = seriesParts(P, post as unknown as Post) as unknown as PostEntry[];
+const { prev, next } = neighbours(P, post as unknown as Post) as unknown as { prev?: PostEntry; next?: PostEntry };
+const { Content, headings } = await render(post);
+const toc = headings.filter(h => h.depth === 2);
+const a = audioOf(post.id);
+const label = (p: PostEntry, dir: string) => p.data.series ? `${dir === 'prev' ? '← ' : ''}Part ${p.data.part}${dir === 'next' ? ' →' : ''}` : dir === 'prev' ? '← Previous' : 'Next →';
+---
+<BaseLayout title={d.series ? `${d.title} (${d.series.title}, ${partLabel(d)})` : d.title} description={d.summary} page="post">
+  <div class="art-grid">
+    <article class={`cat-${d.category}`} data-pagefind-body>
+      <nav class="crumbs" data-pagefind-ignore><a class="back" href={url(`${d.category}/`)}><Icon name="back" />{CATEGORIES[d.category].name}</a></nav>
+      <header class="art-head">
+        <span data-pagefind-ignore><TopicTag post={post} /></span>
+        <h1 data-pagefind-meta="title">{d.title}</h1>
+        <p class="lede">{d.summary}</p>
+        <div class="meta" data-pagefind-ignore><span>{SITE.author}</span><span>{formatDate(d.date)}</span><span>{d.readingMinutes} min read</span></div>
+      </header>
+      <span hidden data-pagefind-filter="topic">{CATEGORIES[d.category].name}</span>
+      <span hidden data-pagefind-meta="topic">{CATEGORIES[d.category].name}</span>
+      {d.series && <span hidden data-pagefind-meta="series">{`${d.series.title} · ${partLabel(d)}`}</span>}
+      {d.series && <div data-pagefind-ignore><SeriesNav post={post} parts={parts} /></div>}
+      {a && (
+        <div class="listen-line" data-pagefind-ignore>
+          <ListenButton post={post} />
+          <span class="note">{next && d.series ? `then Part ${next.data.part} plays next` : 'read aloud, in full'}</span>
+          <button class="spd" type="button" data-speed aria-label="Playback speed" data-speed-label>1×</button>
+        </div>
+      )}
+      <div class="prose" style={a ? undefined : 'margin-top:36px'}>
+        <Content components={{ Stepper }} />
+        {(prev || next) && (
+          <nav class="next-prev" data-pagefind-ignore>
+            {prev ? <a href={postUrl(prev)}><small>{label(prev, 'prev')}</small><span>{prev.data.title}</span></a> : <span></span>}
+            {next && <a class="next" href={postUrl(next)}><small>{label(next, 'next')}</small><span>{next.data.title}</span></a>}
+          </nav>
+        )}
+      </div>
+    </article>
+    {toc.length > 1 && <aside class="toc" aria-label="On this page"><p class="h5">On this page</p>{toc.map(h => <a href={`#${h.slug}`}>{h.text}</a>)}</aside>}
+  </div>
+</BaseLayout>

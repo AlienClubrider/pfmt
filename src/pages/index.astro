@@ -1,3 +1,43 @@
 ---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostCard from '../components/PostCard.astro';
+import TopicTag from '../components/TopicTag.astro';
+import ListenButton from '../components/ListenButton.astro';
+import CoverArt from '../components/CoverArt.astro';
+import { CATEGORIES, formatDate } from '../lib/posts';
+import { allPosts, postUrl, url } from '../lib/site';
+const posts = await allPosts();
+const [f, ...rest] = posts;
+const recent = rest.slice(0, 6);
 ---
-<p>Penny for My Thoughts: scaffold.</p>
+<BaseLayout page="home">
+  <div class="wrap">
+    <section class="masthead">
+      <p><b>Notes on faith and the things I find.</b> The Bible read slowly, the big words made plain and the hard questions taken seriously, plus the tech I keep using, some of it as illustrated series. Read them, or listen.</p>
+      <div class="topics chips">{(Object.keys(CATEGORIES) as (keyof typeof CATEGORIES)[]).map(k => <a class={`chip cat-${k}`} href={url(`${k}/`)}><span class="dot"></span>{CATEGORIES[k].name}</a>)}</div>
+    </section>
+    {f && (
+      <section class={`feature cat-${f.data.category}`}>
+        <div>
+          <div class="eyebrow"><span class="eyebrow-label">Latest</span><TopicTag post={f} /></div>
+          <h1><a href={postUrl(f)}>{f.data.title}</a></h1>
+          <p class="lede">{f.data.summary}</p>
+          <div class="meta"><span>{formatDate(f.data.date)}</span><span>{f.data.readingMinutes} min read</span></div>
+          <div class="actions"><a class="btn primary" href={postUrl(f)}>Read the post</a><ListenButton post={f} /></div>
+        </div>
+        <a class="art" href={postUrl(f)} aria-hidden="true" tabindex="-1"><CoverArt post={f} /></a>
+      </section>
+    )}
+    {recent.length > 0 && (
+      <>
+        <div class="sec-head"><h2>Recent</h2><a class="more" href={url('posts/')}>All posts →</a></div>
+        <div class="grid">{recent.map(p => <PostCard post={p} />)}</div>
+      </>
+    )}
+    {!f && <section class="soon"><h2>The first posts are coming soon</h2><p>Check back shortly.</p></section>}
+    <section class="listen-band">
+      <div><h2>Prefer to listen?</h2><p>Every post is read aloud in a natural voice. Start one and it carries on to the next, like a podcast, so it works in the car.</p></div>
+      <div class="links"><a class="btn" href={url('listen/')}>Open the listen queue</a><a class="btn" href={url('podcast.xml')}>Podcast feed</a></div>
+    </section>
+  </div>
+</BaseLayout>

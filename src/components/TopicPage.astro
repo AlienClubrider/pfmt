@@ -1,0 +1,35 @@
+---
+// A topic page (Faith, Tech) or All posts: plain header, count, the posts. Faith shows "coming soon" until it has posts.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostCard from './PostCard.astro';
+import { coverSvg } from '../lib/covers';
+import { CATEGORIES, type Category } from '../lib/posts';
+import { url, type PostEntry } from '../lib/site';
+interface Props { topic: Category | 'all'; posts: PostEntry[] }
+const { topic, posts } = Astro.props;
+const H = topic === 'all'
+  ? { k: 'Everything', h: 'All posts', l: 'Every post, newest first. Each one can be read or heard.' }
+  : { k: 'Topic', h: CATEGORIES[topic].name, l: CATEGORIES[topic].blurb };
+const art = topic === 'all' ? coverSvg({ cover: 'shelf', category: 'all', square: true }) : coverSvg({ category: topic, seed: 1, square: true });
+---
+<BaseLayout title={H.h} page="cat" current={topic} description={H.l}>
+  <div class="wrap">
+    <header class={`cat-head cat-${topic}`}>
+      <div><span class="eyebrow-label">{H.k}</span><h1>{H.h}</h1></div>
+      <div class="art" aria-hidden="true" set:html={art} />
+      <p class="lede">{H.l}</p>
+    </header>
+    {posts.length ? (
+      <>
+        <div class="toolbar"><span class="count">{posts.length} {posts.length === 1 ? 'post' : 'posts'}</span></div>
+        <div class="grid">{posts.map(p => <PostCard post={p} />)}</div>
+      </>
+    ) : (
+      <section class="soon">
+        <h2>The first posts are coming soon</h2>
+        <p>Nothing here yet. In the meantime, there's a full illustrated series to read or listen to under Tech.</p>
+        <a class="btn" href={url('tech/')}>Browse Tech</a>
+      </section>
+    )}
+  </div>
+</BaseLayout>

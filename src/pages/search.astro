@@ -1,0 +1,74 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { CATEGORIES } from '../lib/posts';
+import { url } from '../lib/site';
+---
+<BaseLayout title="Search" page="search" description="Search every post on Penny for My Thoughts.">
+  <div class="wrap" style="max-width:860px">
+    <form class="search-big" role="search" id="sform" data-base={url()}>
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+      <input name="q" id="q" placeholder="Search posts, verses, topics…" autocomplete="off" aria-label="Search" />
+      <button class="icon-btn" type="reset" aria-label="Clear"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+    </form>
+    <div class="chips" id="scope" style="margin-top:16px">
+      <button class="chip on" type="button" data-scope="">Everything</button>
+      {Object.values(CATEGORIES).map(c => <button class="chip" type="button" data-scope={c.name}>{c.name}</button>)}
+    </div>
+    <div id="out" aria-live="polite"></div>
+    <noscript><p style="color:var(--muted)">Search needs JavaScript. You can still browse <a href={url('posts/')}>all posts</a>.</p></noscript>
+  </div>
+</BaseLayout>
+<script>
+  type Hit = { url: string; excerpt: string; meta: Record<string, string> };
+  let pf: any = null, scope = '', seq = 0;
+  const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+  const catOf = (name?: string) => (name || '').toLowerCase();
+  function empty(q: string) {
+    const base = document.getElementById('sform')!.dataset.base!;
+    return `<div class="empty"><svg class="art" viewBox="0 0 240 150" aria-hidden="true">
+      <rect x="40" y="26" width="110" height="100" rx="10" fill="var(--surface)" stroke="var(--rule)" stroke-width="2"/>
+      <path d="M60 52h60M60 72h70M60 92h44" stroke="var(--rule)" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="150" cy="78" r="30" fill="color-mix(in srgb, var(--link) 10%, transparent)" stroke="var(--link)" stroke-width="6"/><path d="m172 100 26 26" stroke="var(--link)" stroke-width="10" stroke-linecap="round"/>
+      <circle cx="196" cy="34" r="16" fill="var(--accent)"/><circle cx="196" cy="34" r="11" fill="none" stroke="var(--bg)" stroke-opacity=".6" stroke-width="1.5"/></svg>
+      <h2>${q ? `Nothing for “${esc(q)}” yet` : 'Search the blog'}</h2>
+      <p>${q ? 'Try a shorter word or a topic. Search looks at titles and the full text of every post.' : 'Type a word, a verse or a topic.'}</p>
+      <div class="group-label">Try one of these</div>
+      <div class="chips">${['thread pool', 'virtual threads', 'CompletableFuture', 'marketing'].map(t => `<a class="chip" href="?q=${encodeURIComponent(t)}">${t}</a>`).join('')}</div>
+      <div class="group-label">Or browse a topic</div>
+      <div class="chips"><a class="chip cat-faith" href="${base}faith/"><span class="dot"></span>Faith</a><a class="chip cat-tech" href="${base}tech/"><span class="dot"></span>Tech</a></div></div>`;
+  }
+  async function run() {
+    const input = document.getElementById('q') as HTMLInputElement | null; if (!input) return;
+    const out = document.getElementById('out')!, q = input.value.trim(), mine = ++seq;
+    if (!q) { out.innerHTML = empty(''); return; }
+    if (!pf) {
+      const base = document.getElementById('sform')!.dataset.base!;
+      try { pf = await import(/* @vite-ignore */ `${base}pagefind/pagefind.js`); await pf.options({ excerptLength: 24 }); }
+      catch { out.innerHTML = '<p class="results-n">Search isn’t available right now.</p>'; return; }
+    }
+    const res = await pf.search(q, scope ? { filters: { topic: scope } } : {});
+    const hits: Hit[] = await Promise.all(res.results.slice(0, 20).map((r: any) => r.data()));
+    if (mine !== seq) return;
+    out.innerHTML = hits.length
+      ? `<p class="results-n">${hits.length} ${hits.length === 1 ? 'result' : 'results'} for “${esc(q)}”</p>` + hits.map(h => `
+        <a class="result cat-${catOf(h.meta.topic)}" href="${h.url}" style="grid-template-columns:minmax(0,1fr)"><div>
+          <span class="tagline"><span class="tag">${esc(h.meta.topic || '')}</span>${h.meta.series ? `<span class="topic">${esc(h.meta.series)}</span>` : ''}</span>
+          <h3>${esc(h.meta.title || '')}</h3><p>${h.excerpt}</p></div></a>`).join('')
+      : empty(q);
+  }
+  function init() {
+    const form = document.getElementById('sform') as HTMLFormElement | null; if (!form) return;
+    const input = document.getElementById('q') as HTMLInputElement;
+    input.value = new URLSearchParams(location.search).get('q') ?? '';
+    let t: number | undefined;
+    input.addEventListener('input', () => { clearTimeout(t); t = window.setTimeout(() => { history.replaceState(null, '', input.value ? `?q=${encodeURIComponent(input.value)}` : location.pathname); run(); }, 160); });
+    form.addEventListener('submit', e => { e.preventDefault(); run(); });
+    form.addEventListener('reset', () => setTimeout(() => { history.replaceState(null, '', location.pathname); run(); input.focus(); }));
+    document.getElementById('scope')!.addEventListener('click', e => {
+      const b = (e.target as Element).closest<HTMLElement>('[data-scope]'); if (!b) return;
+      scope = b.dataset.scope!; document.querySelectorAll('[data-scope]').forEach(x => x.classList.toggle('on', x === b)); run();
+    });
+    run();
+  }
+  document.addEventListener('astro:page-load', init);
+</script>
