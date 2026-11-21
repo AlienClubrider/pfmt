@@ -1,7 +1,7 @@
 /* Penny for My Thoughts: site styles, ported from the approved v5 mockups.
    Book palette, no purple, no web fonts, no CDN. Light by default, dark via [data-theme]. */
 :root, .force-light {
-  --bg: #fbf8f2; --bg-2: #f3eee4; --surface: #ffffff; --text: #22201c; --muted: #6f685d; --faint: #9a9284; --rule: #e6dfd2;
+  --bg: #fbf8f2; --bg-2: #f3eee4; --surface: #ffffff; --text: #22201c; --muted: #6f685d; --faint: #716a5e; --rule: #e6dfd2;
   --link: #0b6b6b; --accent: #b4532a; --on-accent: #ffffff;
   --shadow: 0 1px 2px rgba(40,30,10,.05), 0 6px 24px rgba(40,30,10,.07);
   --c-faith: #31609e; --c-faith-soft: #e0e8f3;
@@ -19,7 +19,7 @@
 }
 :root[data-theme="dark"], .force-dark {
   color-scheme: dark;
-  --bg: #16181c; --bg-2: #1d2026; --surface: #1f2329; --text: #e9e5dc; --muted: #a59f94; --faint: #7c776e; --rule: #2c3138;
+  --bg: #16181c; --bg-2: #1d2026; --surface: #1f2329; --text: #e9e5dc; --muted: #a59f94; --faint: #928c82; --rule: #2c3138;
   --link: #5cc8c0; --accent: #ef8a5c; --on-accent: #16181c;
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.28);
   --c-faith: #86aee8; --c-faith-soft: #1c2b40;
@@ -63,7 +63,7 @@ svg.i { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-widt
 /* ---------- layout ---------- */
 .layout { display: grid; grid-template-columns: var(--side) minmax(0, 1fr); min-height: calc(100vh - var(--top)); }
 .side { position: sticky; top: var(--top); height: calc(100vh - var(--top)); overflow-y: auto; padding: 26px 16px 40px; border-right: 1px solid var(--rule); background: var(--bg); }
-.side h4 { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin: 26px 12px 6px; font-weight: 650; }
+.side .h4 { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin: 26px 12px 6px; font-weight: 650; }
 .side a { display: flex; align-items: center; gap: 12px; padding: 7px 12px; border-radius: 8px; color: var(--muted); font-size: .94rem; text-decoration: none !important; }
 .side a svg { width: 18px; height: 18px; }
 .side a:hover { background: var(--bg-2); color: var(--text); }
@@ -165,7 +165,7 @@ body.has-mini .main { padding-bottom: 130px; }
 
 /* footer */
 .foot { margin-top: 96px; padding: 36px 0 10px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 28px; font-size: .9rem; }
-.foot h5 { margin: 0 0 10px; font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 650; }
+.foot .h5 { margin: 0 0 10px; font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 650; }
 .foot a { display: block; color: var(--muted); padding: 3px 0; }
 .foot .brand { display: inline-flex; }
 .foot p { color: var(--muted); margin: 12px 0; max-width: 22rem; }
@@ -213,7 +213,7 @@ body.has-mini .main { padding-bottom: 130px; }
 .fig svg .t-muted { fill: var(--muted); } .fig svg .t-small { font-size: 11px; } .fig svg .t-bold { font-weight: 700; } .fig svg .t-mid { text-anchor: middle; }
 .fig svg .line { stroke: var(--svg-line); stroke-width: 1.5; fill: none; }
 .toc { position: sticky; top: calc(var(--top) + 44px); align-self: start; font-size: .86rem; padding-top: 150px; }
-.toc h5 { margin: 0 0 10px; font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 650; }
+.toc .h5 { margin: 0 0 10px; font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 650; }
 .toc a { display: block; padding: 5px 0 5px 14px; border-left: 1px solid var(--rule); color: var(--muted); line-height: 1.35; }
 .toc a.on { border-left: 2px solid var(--accent); padding-left: 13px; color: var(--text); font-weight: 600; }
 .next-prev { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 56px 0 0; padding-top: 28px; border-top: 1px solid var(--rule); }
@@ -415,3 +415,4 @@ mark { background: color-mix(in srgb, var(--c-books) 28%, transparent); color: i
 body.on-listen .mini { display: none !important; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 :root[data-theme="dark"] .when-light, :root:not([data-theme="dark"]) .when-dark { display: none; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

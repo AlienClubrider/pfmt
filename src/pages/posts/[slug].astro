@@ -56,6 +56,6 @@ const label = (p: PostEntry, dir: string) => p.data.series ? `${dir === 'prev' ?
         )}
       </div>
     </article>
-    {toc.length > 1 && <aside class="toc" aria-label="On this page"><h5>On this page</h5>{toc.map(h => <a href={`#${h.slug}`}>{h.text}</a>)}</aside>}
+    {toc.length > 1 && <aside class="toc" aria-label="On this page"><p class="h5">On this page</p>{toc.map(h => <a href={`#${h.slug}`}>{h.text}</a>)}</aside>}
   </div>
 </BaseLayout>
