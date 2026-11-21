@@ -32,6 +32,8 @@ except ImportError:
 import argparse, hashlib, json, subprocess, tempfile, warnings
 from pathlib import Path
 
+from spoken import spoken
+
 warnings.filterwarnings('ignore', category=UserWarning)  # torch/kokoro deprecation noise
 warnings.filterwarnings('ignore', category=FutureWarning)
 
@@ -45,13 +47,17 @@ VOICE = 'am_michael'         # the voice Bryson heard and liked in the mockups
 SPEED = 1.0
 GAP_HEADING, GAP_PARAGRAPH = 0.9, 0.55
 OPUS = ['-c:a', 'libopus', '-b:a', '32k', '-application', 'audio']
-AAC = ['-c:a', 'aac', '-b:a', '48k', '-movflags', '+faststart']
+AAC = ['-c:a', 'aac', '-b:a', '48k', '-ar', '24000', '-movflags', '+faststart']
+# Kokoro comes out near -27 LUFS; podcast apps and Apple's guidance sit near -16.
+LOUDNESS = ['-af', 'loudnorm=I=-16:TP=-2:LRA=11']
 # Bump when the way text becomes audio changes, so every post re-renders.
 RENDER_VERSION = 1
 
 
 def render_key(text: str, voice: str) -> str:
-    recipe = json.dumps([RENDER_VERSION, voice, SPEED, GAP_HEADING, GAP_PARAGRAPH, OPUS, AAC])
+    rules = (Path(__file__).resolve().parent / 'spoken.py').read_bytes()  # new speech rules re-render
+    recipe = json.dumps([RENDER_VERSION, voice, SPEED, GAP_HEADING, GAP_PARAGRAPH, OPUS, AAC, LOUDNESS,
+                         hashlib.sha256(rules).hexdigest()])
     return hashlib.sha256((recipe + '\n' + text).encode()).hexdigest()[:16]
 
 
@@ -70,14 +76,14 @@ def synthesize(text: str, voice: str, wav_path: Path) -> None:
     silence = lambda s: np.zeros(int(SR * s), dtype=np.float32)
     with sf.SoundFile(wav_path, 'w', SR, 1, 'PCM_16') as wav:  # streamed: long chapters stay small in memory
         for line, heading in lines_of(text):
-            for _, _, audio in pipe(line, voice=voice, speed=SPEED):
+            for _, _, audio in pipe(spoken(line), voice=voice, speed=SPEED):
                 wav.write(audio.numpy() if hasattr(audio, 'numpy') else audio)
             wav.write(silence(GAP_HEADING if heading else GAP_PARAGRAPH))
 
 
 def encode(wav: Path, out: Path, codec: list) -> None:
     tmp = out.with_suffix(out.suffix + '.part')
-    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(wav), '-ac', '1', *codec,
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(wav), '-ac', '1', *LOUDNESS, *codec,
                     '-map_metadata', '-1', '-f', 'ogg' if out.suffix == '.opus' else 'mp4', str(tmp)], check=True)
     tmp.replace(out)
 

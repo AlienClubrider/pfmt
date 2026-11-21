@@ -1,1 +1,110 @@
-{}
+{
+  "marketing-for-the-ceo-1-the-marketing-map": {
+    "src": "audio/marketing-for-the-ceo-1-the-marketing-map.opus",
+    "fallback": "audio/marketing-for-the-ceo-1-the-marketing-map.m4a",
+    "seconds": 532.7,
+    "bytes": 2144464,
+    "fallbackBytes": 3341595,
+    "voice": "am_michael",
+    "hash": "6951d247207c1c4f"
+  },
+  "marketing-for-the-ceo-2-getting-found-without-paying": {
+    "src": "audio/marketing-for-the-ceo-2-getting-found-without-paying.opus",
+    "fallback": "audio/marketing-for-the-ceo-2-getting-found-without-paying.m4a",
+    "seconds": 828.1,
+    "bytes": 3365627,
+    "fallbackBytes": 5176077,
+    "voice": "am_michael",
+    "hash": "d11caa356520f447"
+  },
+  "marketing-for-the-ceo-3-paying-for-attention": {
+    "src": "audio/marketing-for-the-ceo-3-paying-for-attention.opus",
+    "fallback": "audio/marketing-for-the-ceo-3-paying-for-attention.m4a",
+    "seconds": 850.1,
+    "bytes": 3441264,
+    "fallbackBytes": 5327474,
+    "voice": "am_michael",
+    "hash": "3620ef0f47b462e7"
+  },
+  "marketing-for-the-ceo-4-running-it-as-ceo": {
+    "src": "audio/marketing-for-the-ceo-4-running-it-as-ceo.opus",
+    "fallback": "audio/marketing-for-the-ceo-4-running-it-as-ceo.m4a",
+    "seconds": 690.7,
+    "bytes": 2786204,
+    "fallbackBytes": 4341489,
+    "voice": "am_michael",
+    "hash": "a7cee03fb5e0f2c9"
+  },
+  "threads-futures-queues-1-one-request-one-thread": {
+    "src": "audio/threads-futures-queues-1-one-request-one-thread.opus",
+    "fallback": "audio/threads-futures-queues-1-one-request-one-thread.m4a",
+    "seconds": 560.8,
+    "bytes": 2264012,
+    "fallbackBytes": 3510229,
+    "voice": "am_michael",
+    "hash": "c7097da19b04fc5d"
+  },
+  "threads-futures-queues-2-pools-and-queues": {
+    "src": "audio/threads-futures-queues-2-pools-and-queues.opus",
+    "fallback": "audio/threads-futures-queues-2-pools-and-queues.m4a",
+    "seconds": 536.0,
+    "bytes": 2161390,
+    "fallbackBytes": 3346407,
+    "voice": "am_michael",
+    "hash": "55d75e903dd4f7ca"
+  },
+  "threads-futures-queues-3-why-its-fast": {
+    "src": "audio/threads-futures-queues-3-why-its-fast.opus",
+    "fallback": "audio/threads-futures-queues-3-why-its-fast.m4a",
+    "seconds": 486.8,
+    "bytes": 1973688,
+    "fallbackBytes": 3054886,
+    "voice": "am_michael",
+    "hash": "20e0fd480d0f0391"
+  },
+  "threads-futures-queues-4-completablefuture-read-slowly": {
+    "src": "audio/threads-futures-queues-4-completablefuture-read-slowly.opus",
+    "fallback": "audio/threads-futures-queues-4-completablefuture-read-slowly.m4a",
+    "seconds": 825.6,
+    "bytes": 3336491,
+    "fallbackBytes": 5191600,
+    "voice": "am_michael",
+    "hash": "24dfe6b3435d0f1c"
+  },
+  "threads-futures-queues-5-pitfalls": {
+    "src": "audio/threads-futures-queues-5-pitfalls.opus",
+    "fallback": "audio/threads-futures-queues-5-pitfalls.m4a",
+    "seconds": 756.0,
+    "bytes": 3022480,
+    "fallbackBytes": 4732611,
+    "voice": "am_michael",
+    "hash": "d9ccadb2b58c8898"
+  },
+  "threads-futures-queues-6-the-readable-way-virtual-threads": {
+    "src": "audio/threads-futures-queues-6-the-readable-way-virtual-threads.opus",
+    "fallback": "audio/threads-futures-queues-6-the-readable-way-virtual-threads.m4a",
+    "seconds": 792.4,
+    "bytes": 3200368,
+    "fallbackBytes": 4986488,
+    "voice": "am_michael",
+    "hash": "00eb7c26d7479a19"
+  },
+  "threads-futures-queues-7-queue-consumers-at-scale": {
+    "src": "audio/threads-futures-queues-7-queue-consumers-at-scale.opus",
+    "fallback": "audio/threads-futures-queues-7-queue-consumers-at-scale.m4a",
+    "seconds": 698.4,
+    "bytes": 2808264,
+    "fallbackBytes": 4364746,
+    "voice": "am_michael",
+    "hash": "6f402d037ef2c416"
+  },
+  "threads-futures-queues-8-cheat-sheet": {
+    "src": "audio/threads-futures-queues-8-cheat-sheet.opus",
+    "fallback": "audio/threads-futures-queues-8-cheat-sheet.m4a",
+    "seconds": 574.0,
+    "bytes": 2302792,
+    "fallbackBytes": 3589435,
+    "voice": "am_michael",
+    "hash": "ee4d9ffecccdc7b2"
+  }
+}
