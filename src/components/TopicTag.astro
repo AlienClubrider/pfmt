@@ -1,0 +1,10 @@
+---
+// One category label; a series part adds its series and place as quiet text.
+import { CATEGORIES, partLabel } from '../lib/posts';
+import type { PostEntry } from '../lib/site';
+interface Props { post: PostEntry }
+const d = Astro.props.post.data;
+---
+{d.series
+  ? <span class="tagline"><span class="tag">{CATEGORIES[d.category].name}</span><span class="topic">{d.series.title} · <span class="nw">{partLabel(d)}</span></span></span>
+  : <span class="tag">{CATEGORIES[d.category].name}</span>}

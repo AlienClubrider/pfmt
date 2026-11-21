@@ -1,0 +1,5 @@
+---
+import TopicPage from '../../components/TopicPage.astro';
+import { allPosts } from '../../lib/site';
+---
+<TopicPage topic="all" posts={await allPosts()} />

@@ -1,0 +1,96 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import Icon from '../components/Icon.astro';
+import Logo from '../components/Logo.astro';
+import { CATEGORIES, countIn, type Post } from '../lib/posts';
+import { allPosts, queueData, url, SITE } from '../lib/site';
+import '../styles/global.css';
+
+interface Props { title?: string; description?: string; page: 'home' | 'cat' | 'post' | 'listen' | 'search' | '404'; current?: string; noFooter?: boolean }
+const { title, description = SITE.description, page, current } = Astro.props;
+const posts = await allPosts();
+const queue = await queueData();
+const fullTitle = title ? `${title} · ${SITE.title}` : SITE.title;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const q = page === 'search' ? '' : '';
+const on = (cond: boolean) => (cond ? 'on' : '');
+const FAV = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#b4532a"/><circle cx="20" cy="20" r="14.2" fill="none" stroke="#fbf8f2" stroke-opacity=".5" stroke-width="1.2"/><text x="20" y="27" text-anchor="middle" font-family="Georgia, serif" font-size="19" font-weight="700" font-style="italic" fill="#fbf8f2">p</text></svg>`;
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>{fullTitle}</title>
+  <meta name="description" content={description} />
+  <link rel="canonical" href={canonical} />
+  <meta name="theme-color" content="#fbf8f2" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)" />
+  <meta property="og:title" content={fullTitle} />
+  <meta property="og:description" content={description} />
+  <meta property="og:type" content={page === 'post' ? 'article' : 'website'} />
+  <meta property="og:url" content={canonical} />
+  <link rel="icon" type="image/svg+xml" href={`data:image/svg+xml,${encodeURIComponent(FAV)}`} />
+  <link rel="alternate" type="application/rss+xml" title={`${SITE.title} (podcast)`} href={url('podcast.xml')} />
+  <script is:inline>
+    // theme before first paint: saved choice, then the system setting
+    (function () { var t = null; try { t = localStorage.getItem('pfmt-theme'); } catch (e) {}
+      document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); })();
+    document.addEventListener('astro:after-swap', function () { var t = null; try { t = localStorage.getItem('pfmt-theme'); } catch (e) {}
+      document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); });
+  </script>
+  <ClientRouter />
+</head>
+<body class={page === 'listen' ? 'on-listen' : ''}>
+  <a class="skip" href="#content">Skip to the content</a>
+  <header class="top">
+    <button class="icon-btn only-phone" type="button" data-drawer aria-label="Menu"><Icon name="menu" /></button>
+    <a class="brand" href={url()} aria-label="Penny for My Thoughts, home"><Logo /></a>
+    <span class="spacer"></span>
+    <form class="search only-desk" action={url('search/')} role="search"><Icon name="search" /><input name="q" placeholder="Search" aria-label="Search" value={q} /></form>
+    <a class="icon-btn only-phone" href={url('search/')} aria-label="Search"><Icon name="search" /></a>
+    <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch light or dark"><Icon name="moon" class="i when-light" /><Icon name="sun" class="i when-dark" /></button>
+  </header>
+  <div class="scrim" data-drawer></div>
+  <div class="layout">
+    <nav class="side" aria-label="Sections">
+      <a href={url()} class={on(page === 'home')}><Icon name="home" />Home</a>
+      <a href={url('posts/')} class={on(page === 'cat' && current === 'all')}><Icon name="list" />All posts<span class="n">{posts.length}</span></a>
+      <a href={url('listen/')} class={on(page === 'listen')}><Icon name="phones" />Listen</a>
+      <h4>Topics</h4>
+      {(Object.keys(CATEGORIES) as (keyof typeof CATEGORIES)[]).map(k => (
+        <a href={url(`${k}/`)} class={`cat-${k} ${on(page === 'cat' && current === k)}`}><span class="dot"></span>{CATEGORIES[k].name}<span class="n">{countIn(posts as unknown as Post[], k)}</span></a>
+      ))}
+    </nav>
+    <main class="main" id="content">
+      <slot />
+      {!Astro.props.noFooter && (
+      <div class="wrap">
+        <footer class="foot">
+          <div class="about"><a class="brand" href={url()}><Logo /></a><p>Notes on faith and the tech I like, by {SITE.author}. Every post can be read or heard.</p>
+            <div class="socials"><a href={url('podcast.xml')} aria-label="Podcast feed (RSS)"><Icon name="rss" /></a><a href={url('listen/')} aria-label="Listen"><Icon name="phones" /></a><a href={SITE.repo} aria-label="Source on GitHub"><Icon name="gh" /></a></div></div>
+          <div><h5>Topics</h5><a href={url('faith/')}>Faith</a><a href={url('tech/')}>Tech</a><a href={url('posts/')}>All posts</a></div>
+          <div><h5>Listen</h5><a href={url('listen/')}>Listen queue</a><a href={url('podcast.xml')}>Podcast feed (RSS)</a></div>
+          <div class="copy">© {new Date().getFullYear()} {SITE.author}</div>
+        </footer>
+      </div>)}
+    </main>
+  </div>
+  <div id="player-root" transition:persist="player">
+    <audio id="pfmt-audio" preload="none"></audio>
+    <div class="mini" id="mini" hidden></div>
+  </div>
+  <script type="application/json" id="pfmt-queue" set:html={JSON.stringify(queue)} />
+  <script>
+    import '../scripts/player';
+    // drawer + theme toggle, wired once for every page
+    document.addEventListener('click', e => {
+      const t = (e.target as Element).closest<HTMLElement>('[data-drawer],[data-theme-toggle]');
+      if (!t) return;
+      if (t.hasAttribute('data-drawer')) document.body.classList.toggle('drawer');
+      else { const d = document.documentElement; d.dataset.theme = d.dataset.theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('pfmt-theme', d.dataset.theme); } catch {} }
+    });
+    document.addEventListener('astro:after-swap', () => document.body.classList.remove('drawer'));
+  </script>
+</body>
+</html>

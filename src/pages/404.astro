@@ -1,0 +1,14 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { url } from '../lib/site';
+---
+<BaseLayout title="Page not found" page="404">
+  <div class="wrap">
+    <section class="not-found">
+      <span class="eyebrow-label">404</span>
+      <h1>This page isn’t here</h1>
+      <p>The link may be old, or the post may have moved. Try the home page or search.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn primary" href={url()}>Home</a><a class="btn" href={url('search/')}>Search</a></div>
+    </section>
+  </div>
+</BaseLayout>

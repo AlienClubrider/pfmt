@@ -1,0 +1,26 @@
+---
+// "Part 2 of 8", previous/next part, and the list of all parts (open on wide screens, closed on phones).
+import Icon from './Icon.astro';
+import { partLabel } from '../lib/posts';
+import { postUrl, type PostEntry } from '../lib/site';
+interface Props { post: PostEntry; parts: PostEntry[] }
+const { post, parts } = Astro.props;
+const i = parts.findIndex(p => p.id === post.id), prev = parts[i - 1], next = parts[i + 1];
+const s = post.data.series!;
+---
+<nav class="series" aria-label={`${s.title}, all parts`}>
+  <div class="row">
+    <span class="part">{partLabel(post.data)}</span><span class="sname">{s.title}</span>
+    {prev ? <a class="step" href={postUrl(prev)} aria-label={`Previous part: ${prev.data.title}`}><Icon name="back" /></a> : <span class="step" aria-disabled="true"><Icon name="back" /></span>}
+    {next ? <a class="step" href={postUrl(next)} aria-label={`Next part: ${next.data.title}`}><Icon name="next" /></a> : <span class="step" aria-disabled="true"><Icon name="next" /></span>}
+  </div>
+  <details data-series-list>
+    <summary>All {parts.length} parts<Icon name="down" /></summary>
+    <ol>{parts.map(p => <li class={p.id === post.id ? 'on' : ''}><a href={postUrl(p)} aria-current={p.id === post.id ? 'page' : undefined}><span>{p.data.title}</span><small>{p.id === post.id ? 'reading' : `${p.data.readingMinutes} min`}</small></a></li>)}</ol>
+  </details>
+</nav>
+<script>
+  // open the list by default on wide screens; phones keep it folded
+  const open = () => document.querySelectorAll<HTMLDetailsElement>('[data-series-list]').forEach(d => { if (matchMedia('(min-width: 901px)').matches) d.open = true; });
+  document.addEventListener('astro:page-load', open);
+</script>

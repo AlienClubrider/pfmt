@@ -1,0 +1,9 @@
+---
+// The quiet listen control. Renders nothing for a post without audio. The player script keeps its label in sync.
+import { audioOf, type PostEntry } from '../lib/site';
+interface Props { post: PostEntry; class?: string }
+const { post, class: cls = '' } = Astro.props;
+const a = audioOf(post.id);
+const mins = a ? Math.max(1, Math.round(a.seconds / 60)) : 0;
+---
+{a && <button class={`listen ${cls}`} type="button" data-play={post.id} data-mins={mins} aria-label={`Listen, ${mins} min`}><span class="disc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5Z"/></svg></span><span class="lbl">Listen · {mins} min</span></button>}
