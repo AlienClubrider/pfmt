@@ -1,0 +1,328 @@
+---
+title: "Pools and queues"
+date: 2026-11-20
+category: tech
+series:
+  id: threads-futures-queues
+  title: "Threads, Futures and Queues"
+part: 2
+partsTotal: 8
+tags: ["java", "concurrency", "spring-boot", "thread-pools"]
+readingMinutes: 7
+summary: "\"We only have so many running at once.\" That sentence is about pools and queues. This chapter shows how a thread pool decides what to do with each new task, how Spring's @Async and queue listeners use pools, and what happens when everything is full."
+---
+## Why reuse threads
+
+Starting a new operating system thread takes time and memory. Doing it for every small task would be wasteful, and nothing would stop you from starting 50,000 of them by accident.
+
+So we keep a <dfn>thread pool</dfn>: a fixed group of threads that stay alive and take work one task after another. Tasks that arrive while every thread is busy wait in a <dfn>task queue</dfn>.
+
+<aside class="callout analogy">
+<p class="callout-title">In the kitchen</p>
+<p>The kitchen has a fixed number of <strong>cooks</strong> on shift (the pool). New <strong>order tickets</strong> go on the <strong>ticket rail</strong> (the queue). A cook who finishes a dish grabs the next ticket from the rail. If the rail is full, the host at the front door has to stop seating guests or turn them away.</p>
+</aside>
+
+## How a pool decides: the four rules
+
+Java's standard pool is `ThreadPoolExecutor`. Spring's `ThreadPoolTaskExecutor` wraps it. It has three numbers:
+
+- **core size**: threads it keeps around,
+- **queue capacity**: how many tasks may wait,
+- **max size**: the most threads it will ever have.
+
+When a new task arrives, it follows these rules, in this order:
+
+1. Fewer than *core* threads? Start a new thread for it.
+2. Otherwise, is there room in the *queue*? Put it in the queue.
+3. Queue full, fewer than *max* threads? Start an extra thread.
+4. Everything full? **Reject** the task.
+
+Rule 2 surprises almost everyone. The pool fills the *queue* before it grows past core size. Step through it with a tiny pool: core 2, queue 3, max 4.
+
+<Stepper>
+<figure class="fig stepper" id="fig-2-1">
+<svg viewBox="0 0 400 300" role="img" aria-labelledby="fig-2-1-t">
+<title id="fig-2-1-t">A pool with core size 2, queue capacity 3 and max size 4 receiving 8 tasks: 2 start on core threads, 3 wait in the queue, 2 start on extra threads, and the 8th is rejected.</title>
+<text x="20" y="26" class="t-bold c-thread">Threads</text>
+<text x="84" y="26" class="t-small t-muted">core 2, max 4</text>
+<rect x="20" y="38" width="84" height="62" rx="8" class="s-thread" />
+<rect x="112" y="38" width="84" height="62" rx="8" class="s-thread" />
+<rect x="204" y="38" width="84" height="62" rx="8" class="line-soft" />
+<rect x="296" y="38" width="84" height="62" rx="8" class="line-soft" />
+<text x="62" y="56" class="t-mono t-mid">core-1</text>
+<text x="154" y="56" class="t-mono t-mid">core-2</text>
+<text x="246" y="56" class="t-small t-muted t-mid is-off" data-only="1 2">(extra)</text>
+<text x="338" y="56" class="t-small t-muted t-mid is-off" data-only="1 2">(extra)</text>
+<g data-only="1 2 3 4" class="is-off">
+<rect x="32" y="66" width="60" height="24" rx="5" class="f-queue blink-in" />
+<text x="62" y="83" class="t-on t-mid">task 1</text>
+</g>
+<g data-only="5">
+<rect x="32" y="66" width="60" height="24" rx="5" class="f-queue blink-in" />
+<text x="62" y="83" class="t-on t-mid">task 3</text>
+</g>
+<g>
+<rect x="124" y="66" width="60" height="24" rx="5" class="f-queue" />
+<text x="154" y="83" class="t-on t-mid">task 2</text>
+</g>
+<g data-step="3">
+<rect x="204" y="38" width="84" height="62" rx="8" class="s-thread blink-in" />
+<rect x="296" y="38" width="84" height="62" rx="8" class="s-thread blink-in" />
+<text x="246" y="56" class="t-mono t-mid">extra-1</text>
+<text x="338" y="56" class="t-mono t-mid">extra-2</text>
+<rect x="216" y="66" width="60" height="24" rx="5" class="f-queue" />
+<text x="246" y="83" class="t-on t-mid">task 6</text>
+<rect x="308" y="66" width="60" height="24" rx="5" class="f-queue" />
+<text x="338" y="83" class="t-on t-mid">task 7</text>
+</g>
+<text x="20" y="136" class="t-bold c-queue">Task queue</text>
+<text x="110" y="136" class="t-small t-muted">capacity 3</text>
+<rect x="20" y="146" width="268" height="48" rx="8" class="box" />
+<rect x="30" y="154" width="76" height="32" rx="5" class="line-soft" />
+<rect x="116" y="154" width="76" height="32" rx="5" class="line-soft" />
+<rect x="202" y="154" width="76" height="32" rx="5" class="line-soft" />
+<g data-only="2 3 4" class="is-off">
+<rect x="38" y="158" width="60" height="24" rx="5" class="s-queue blink-in" />
+<text x="68" y="175" class="t-mid">task 3</text>
+</g>
+<g data-step="2">
+<rect x="124" y="158" width="60" height="24" rx="5" class="s-queue blink-in" />
+<text x="154" y="175" class="t-mid">task 4</text>
+</g>
+<g data-step="2">
+<rect x="210" y="158" width="60" height="24" rx="5" class="s-queue blink-in" />
+<text x="240" y="175" class="t-mid">task 5</text>
+</g>
+<text x="338" y="136" class="t-bold c-bad t-mid">Rejected</text>
+<rect x="300" y="146" width="80" height="48" rx="8" class="k-bad" stroke-dasharray="4 4" />
+<g data-step="4">
+<rect x="310" y="158" width="60" height="24" rx="5" class="f-bad blink-in" />
+<text x="340" y="175" class="t-on t-mid">task 8</text>
+</g>
+<g data-only="5">
+<text x="62" y="116" class="t-small c-work t-mid t-bold">↑ took task 3</text>
+</g>
+<text x="20" y="232" class="t-bold">New task? The pool tries, in order:</text>
+<rect x="20" y="244" width="84" height="32" rx="6" class="box" />
+<text x="62" y="265" class="t-mid">1 core</text>
+<rect x="112" y="244" width="84" height="32" rx="6" class="box" />
+<text x="154" y="265" class="t-mid">2 queue</text>
+<rect x="204" y="244" width="84" height="32" rx="6" class="box" />
+<text x="246" y="265" class="t-mid">3 extra</text>
+<rect x="296" y="244" width="84" height="32" rx="6" class="box" />
+<text x="338" y="265" class="t-mid">4 reject</text>
+<g data-only="1" class="is-off">
+<rect x="20" y="244" width="84" height="32" rx="6" class="f-thread" />
+<text x="62" y="265" class="t-mid t-on">1 core</text>
+</g>
+<g data-only="2" class="is-off">
+<rect x="112" y="244" width="84" height="32" rx="6" class="f-queue" />
+<text x="154" y="265" class="t-mid t-on">2 queue</text>
+</g>
+<g data-only="3" class="is-off">
+<rect x="204" y="244" width="84" height="32" rx="6" class="f-thread" />
+<text x="246" y="265" class="t-mid t-on">3 extra</text>
+</g>
+<g data-only="4" class="is-off">
+<rect x="296" y="244" width="84" height="32" rx="6" class="f-bad" />
+<text x="338" y="265" class="t-mid t-on">4 reject</text>
+</g>
+</svg>
+<ol class="step-notes">
+<li>Tasks 1 and 2 arrive. The pool has fewer than 2 (core) threads, so it starts a core thread for each.</li>
+<li>Tasks 3, 4 and 5 arrive. Both core threads are busy, so they go to the <em>queue</em>. No new threads yet, even though max is 4.</li>
+<li>Tasks 6 and 7 arrive. The queue is full, so now the pool grows past core: two extra threads start, up to max (4).</li>
+<li>Task 8 arrives. 4 threads busy, queue full: the pool rejects it. With the default policy that is an exception thrown at the caller.</li>
+<li>core-1 finishes task 1 and takes the oldest waiting task, task 3, from the queue. Tasks always flow: queue → free thread.</li>
+</ol>
+<figcaption><b>Figure 2.1</b> A pool filling up. Tiny numbers so it fits on screen; real pools work exactly the same way with bigger ones.</figcaption>
+</figure>
+</Stepper>
+
+## Spring's `@Async` and its executor
+
+In Spring, a pool is usually a bean of type `ThreadPoolTaskExecutor`. You give work to it with `@Async`, or by calling it directly.
+
+If you don't define one, Spring Boot creates one for you, called `applicationTaskExecutor`. Its threads are named `task-1`, `task-2`, …. Its defaults: **8 core threads**, and an **unbounded** queue. Remember rule 2: with an unbounded queue, the queue never fills, so the pool never grows past 8 and never rejects. Tasks just pile up.
+
+For real work, define your own pool with bounded numbers and a clear name:
+
+<p class="code-title">AsyncConfig.java</p>
+
+```java
+@Configuration
+@EnableAsync
+class AsyncConfig {
+
+    @Bean
+    ThreadPoolTaskExecutor reportExecutor() {
+        var pool = new ThreadPoolTaskExecutor();
+        pool.setThreadNamePrefix("report-"); // (1)
+        pool.setCorePoolSize(4);             // (2)
+        pool.setMaxPoolSize(8);
+        pool.setQueueCapacity(100);          // (3)
+        pool.setRejectedExecutionHandler(
+            new ThreadPoolExecutor.CallerRunsPolicy()); // (4)
+        return pool; // Spring initializes it for you
+    }
+}
+```
+
+<ol class="code-notes">
+<li>A name prefix. In logs and thread dumps you will see <code>report-1</code>, <code>report-2</code>, so you always know which pool did the work.</li>
+<li>4 threads normally, up to 8 under pressure (only once the queue is full, rule 3).</li>
+<li>A bounded queue: at most 100 tasks wait. This is what makes the limit real.</li>
+<li>What to do when full. More on this below.</li>
+</ol>
+
+<p class="code-title">ReportService.java</p>
+
+```java
+@Service
+class ReportService {
+
+    @Async("reportExecutor")  // run on a report-N thread
+    public CompletableFuture<Report> build(long customerId) {
+        Report report = renderSlowReport(customerId);
+        return CompletableFuture.completedFuture(report);
+    }
+}
+```
+
+The caller gets a `CompletableFuture` back straight away, and the work runs on a `report-N` thread. Chapter 4 explains what you can do with that future.
+
+<aside class="callout note">
+<p class="callout-title">Version note</p>
+<p>Once you define your own <code>Executor</code> bean, Spring Boot's auto-configured <code>applicationTaskExecutor</code> backs off. If you turn on virtual threads (<code>spring.threads.virtual.enabled=true</code>, Chapter 6), the auto-configured executor becomes a <code>SimpleAsyncTaskExecutor</code> that starts a virtual thread per task, and the pool settings no longer apply.</p>
+</aside>
+
+## When the pool is full
+
+Rule 4, rejection, is decided by a <dfn>rejection policy</dfn>. The JDK ships four:
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Policy</th><th>What happens to the new task</th><th>Good for</th></tr>
+</thead>
+<tbody>
+<tr><td><code>AbortPolicy</code> (default)</td><td>Throws. In Spring you get a <code>TaskRejectedException</code>.</td><td>Failing fast; the caller decides (e.g. return 503).</td></tr>
+<tr><td><code>CallerRunsPolicy</code></td><td>The thread that submitted it runs it itself.</td><td>Slowing the producer down. Nothing is lost.</td></tr>
+<tr><td><code>DiscardPolicy</code></td><td>Silently dropped.</td><td>Almost never. Work vanishes without a trace.</td></tr>
+<tr><td><code>DiscardOldestPolicy</code></td><td>Drops the oldest queued task, retries the new one.</td><td>Only "latest value wins" data, like live prices.</td></tr>
+</tbody>
+</table>
+</div>
+
+`CallerRunsPolicy` is a simple form of <dfn>backpressure</dfn>: pushing back on whoever is sending work, so they slow down instead of piling it up. If a Tomcat thread submits a task and the pool is full, that Tomcat thread does the work itself. While it is busy, it can't submit more. Intake slows to the speed you can actually handle.
+
+<aside class="callout watch">
+<p class="callout-title">Watch out</p>
+<ul>
+<li><strong>Unbounded queue = hidden overload.</strong> Nothing is ever rejected, so nothing looks wrong. Meanwhile the queue grows, memory grows, and every task waits longer. The first sign is often timeouts somewhere else.</li>
+<li><strong>Max size does nothing with an unbounded queue</strong> (rule 3 never triggers).</li>
+<li><strong><code>@Async</code> only works through the Spring proxy.</strong> Calling an <code>@Async</code> method from another method in the same class runs it on the caller's thread, synchronously.</li>
+</ul>
+</aside>
+
+## Queue listeners: "only so many at once"
+
+Your services also pull messages off a broker: Kafka, RabbitMQ or SQS. The listener is a pool too. Each listener <dfn>container</dfn> runs a fixed number of consumer threads. That number is its <dfn>concurrency</dfn>, and it is exactly "how many messages we process at once".
+
+There is one big difference from `@Async`: listeners *pull*. A consumer thread only fetches more messages when it is ready. So extra messages wait safely in the broker, not in your JVM's memory. Backpressure comes for free.
+
+<figure class="fig" id="fig-2-2">
+<svg viewBox="0 0 400 270" role="img" aria-labelledby="fig-2-2-t">
+<title id="fig-2-2-t">A broker holding many messages feeds a listener with concurrency 3: three consumer threads each process one message, the rest wait in the broker.</title>
+<defs>
+<marker id="ah-2-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" class="ah" />
+</marker>
+</defs>
+<text x="20" y="26" class="t-bold c-queue">Broker</text>
+<text x="20" y="42" class="t-small t-muted">topic / queue</text>
+<rect x="20" y="52" width="110" height="176" rx="8" class="box" />
+<rect x="32" y="62" width="86" height="20" rx="4" class="s-queue" />
+<rect x="32" y="88" width="86" height="20" rx="4" class="s-queue" />
+<rect x="32" y="114" width="86" height="20" rx="4" class="s-queue" />
+<rect x="32" y="140" width="86" height="20" rx="4" class="s-queue" />
+<rect x="32" y="166" width="86" height="20" rx="4" class="s-queue" />
+<text x="75" y="208" class="t-mid t-small t-muted">+ 12,480 more</text>
+<text x="75" y="221" class="t-mid t-small t-muted">waiting safely</text>
+<text x="186" y="26" class="t-bold">Your service</text>
+<text x="186" y="42" class="t-small t-muted">listener, concurrency = 3</text>
+<rect x="176" y="52" width="208" height="176" rx="8" class="box" />
+<rect x="188" y="66" width="84" height="26" rx="13" class="s-thread" />
+<text x="230" y="84" class="t-mono t-mid">C-1</text>
+<rect x="188" y="122" width="84" height="26" rx="13" class="s-thread" />
+<text x="230" y="140" class="t-mono t-mid">C-2</text>
+<rect x="188" y="178" width="84" height="26" rx="13" class="s-thread" />
+<text x="230" y="196" class="t-mono t-mid">C-3</text>
+<rect x="284" y="68" width="88" height="22" rx="4" class="f-queue" />
+<text x="328" y="84" class="t-on t-mid t-small">handling</text>
+<rect x="284" y="124" width="88" height="22" rx="4" class="f-queue" />
+<text x="328" y="140" class="t-on t-mid t-small">handling</text>
+<rect x="284" y="180" width="88" height="22" rx="4" class="f-queue" />
+<text x="328" y="196" class="t-on t-mid t-small">handling</text>
+<path d="M130 79 H184" class="line" marker-end="url(#ah-2-2)" />
+<path d="M130 135 H184" class="line" marker-end="url(#ah-2-2)" />
+<path d="M130 191 H184" class="line" marker-end="url(#ah-2-2)" />
+<text x="20" y="254" class="t-small">At most 3 messages in progress. The next one is fetched</text>
+<text x="20" y="268" class="t-small">only when a consumer thread is free.</text>
+</svg>
+<figcaption><b>Figure 2.2</b> A listener with concurrency 3. The pile of work stays in the broker; your service takes only what it can handle.</figcaption>
+</figure>
+
+This is how you set it in each of the common Spring integrations:
+
+<p class="code-title">Kafka: BillingListener.java</p>
+
+```java
+@KafkaListener(topics = "orders", groupId = "billing",
+               concurrency = "3")  // 3 consumer threads
+void onOrder(OrderPlaced event) {
+    billing.charge(event);
+}
+```
+
+<p class="code-title">application.yaml (RabbitMQ)</p>
+
+```yaml
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        concurrency: 3       # consumers to start with
+        max-concurrency: 10  # may grow to this under load
+        prefetch: 50         # unacked messages per consumer
+```
+
+<p class="code-title">SQS (Spring Cloud AWS): ShippingListener.java</p>
+
+```java
+@SqsListener(value = "shipments",
+             maxConcurrentMessages = "10", // in flight at once
+             maxMessagesPerPoll = "10")
+void onShipment(ShipmentRequested msg) {
+    shipping.book(msg);
+}
+```
+
+Two details worth knowing now (Chapter 7 goes deep):
+
+- **Kafka**: each partition is read by one consumer in the group at a time. With 6 partitions, `concurrency = 10` leaves 4 threads idle.
+- **Prefetch** (Rabbit) and **max poll** (Kafka `max.poll.records`, default 500) are how many messages are fetched ahead into memory. Concurrency is how many are *processed* at once. They are different knobs.
+
+<aside class="callout why">
+<p class="callout-title">Why it matters</p>
+<p>A bounded pool turns "too much work" into something you can see and control: a full queue, a rejected task, a broker lag that grows. An unbounded one turns it into slow, mysterious failure. "Only so many running at once" is not a weakness of your services. It is what keeps a spike from taking them down, and what protects the database behind them.</p>
+</aside>
+
+<aside class="callout recap">
+<p class="callout-title">Recap</p>
+<ol>
+<li>A pool is threads plus a queue. New tasks go: core thread → queue → extra thread → reject. The queue fills before the pool grows.</li>
+<li>Always bound the queue and name the pool's threads. Spring Boot's default executor has an unbounded queue.</li>
+<li>Queue listeners are pools that pull: concurrency is "how many at once", and extra messages wait in the broker.</li>
+</ol>
+</aside>

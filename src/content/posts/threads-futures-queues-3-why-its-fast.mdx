@@ -1,0 +1,309 @@
+---
+title: "Why it's fast: waiting vs working"
+date: 2026-11-20
+category: tech
+series:
+  id: threads-futures-queues
+  title: "Threads, Futures and Queues"
+part: 3
+partsTotal: 8
+tags: ["java", "concurrency", "spring-boot", "performance"]
+readingMinutes: 6
+summary: "Concurrent code is not fast because the CPU works harder. It is fast because it stops waiting in a line. This chapter shows where the time in a request really goes, why three calls at once take as long as the slowest one, and the one formula that explains \"thousands of requests per second\"."
+---
+## Where the time really goes
+
+Take a typical endpoint in a business service. It reads from a database, calls one or two other services, and builds some JSON. Time it, and you find something like this:
+
+<figure class="fig" id="fig-3-1">
+<svg viewBox="0 0 400 220" role="img" aria-labelledby="fig-3-1-t">
+<title id="fig-3-1-t">One 200 millisecond request: about 4 milliseconds of CPU work spread in small slivers, and the rest waiting on the database and two HTTP calls.</title>
+<defs>
+<pattern id="hatch-3-1" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<rect width="2.5" height="6" class="f-wait" opacity=".45" />
+</pattern>
+</defs>
+<text x="20" y="28" class="t-bold">One request, 200 ms</text>
+<rect x="20" y="44" width="360" height="40" rx="4" class="s-wait" />
+<rect x="20" y="44" width="360" height="40" rx="4" class="hatch" fill="url(#hatch-3-1)" />
+<rect x="20" y="44" width="3" height="40" class="f-work" />
+<rect x="88" y="44" width="2" height="40" class="f-work" />
+<rect x="200" y="44" width="2" height="40" class="f-work" />
+<rect x="374" y="44" width="6" height="40" class="f-work" />
+<text x="56" y="69" class="t-mid t-small">DB query</text>
+<text x="145" y="69" class="t-mid t-small">HTTP: pricing</text>
+<text x="288" y="69" class="t-mid t-small">HTTP: stock service</text>
+<path d="M89 84 V92 M201 84 V92" class="line" />
+<rect x="20" y="112" width="14" height="14" rx="3" class="f-work" />
+<text x="40" y="124">working (CPU): ~4 ms</text>
+<rect x="20" y="136" width="14" height="14" rx="3" class="s-wait" />
+<text x="40" y="148">waiting (I/O): ~196 ms</text>
+<text x="20" y="182" class="t-small t-muted">Example numbers. Measure your own with tracing; the shape</text>
+<text x="20" y="196" class="t-small t-muted">(tiny green, lots of amber) is very common for business APIs.</text>
+</svg>
+<figcaption><b>Figure 3.1</b> The thread is "busy" with this request for 200 ms, but the CPU only works for a few of them. The rest is <dfn>I/O wait</dfn>: waiting for bytes to come back over the network.</figcaption>
+</figure>
+
+During all that amber time, the thread is parked. The CPU core is free to run other threads. That is why a pool of 200 threads works on 4 cores (Chapter 1).
+
+But it also tells you where to look for speed. Making the green part faster barely matters. Shrinking or overlapping the amber part is where the wins are.
+
+<aside class="callout analogy">
+<p class="callout-title">In the kitchen</p>
+<p>A cook puts a roast in the oven for 40 minutes. If the cook stands and stares at the oven, one dish takes 40 minutes of the cook's time. If the cook puts the roast in, starts the soup, and chops the salad while both cook, the whole meal is ready when the <em>slowest</em> thing is done. Same cook, same oven. Far less standing around.</p>
+</aside>
+
+## The slowest call, not the sum
+
+Say the home page needs three things that don't depend on each other: the user's **profile** (120 ms), their recent **orders** (200 ms), and **recommendations** (80 ms).
+
+Called one after another, the wait times add up: 120 + 200 + 80 = 400 ms. Started at the same time, the waits overlap, and you are done when the slowest one is done: 200 ms.
+
+<Stepper>
+<figure class="fig stepper" id="fig-3-2">
+<svg viewBox="0 0 400 290" role="img" aria-labelledby="fig-3-2-t">
+<title id="fig-3-2-t">Timeline comparing three calls made one after another, taking 400 ms, with the same three calls made at the same time, taking 200 ms.</title>
+<text x="20" y="24" class="t-bold">One after another</text>
+<text x="20" y="54" class="t-mono t-small">exec-1</text>
+<rect x="80" y="40" width="90" height="22" rx="3" class="s-thread grow-x" data-step="1" />
+<text x="125" y="56" class="t-mid t-small" data-step="1">profile</text>
+<g data-step="2">
+<rect x="170" y="40" width="150" height="22" rx="3" class="s-queue grow-x" />
+<text x="245" y="56" class="t-mid t-small">orders</text>
+<rect x="320" y="40" width="60" height="22" rx="3" class="s-work grow-x" />
+<text x="350" y="56" class="t-mid t-small">recs</text>
+<path d="M380 34 V118" class="k-bad" stroke-dasharray="4 3" />
+<text x="376" y="88" class="t-end t-bold c-bad">400 ms = sum</text>
+</g>
+<g data-step="3">
+<text x="20" y="132" class="t-bold">At the same time</text>
+<text x="20" y="162" class="t-mono t-small">io-1</text>
+<text x="20" y="192" class="t-mono t-small">io-2</text>
+<text x="20" y="222" class="t-mono t-small">io-3</text>
+<rect x="80" y="148" width="90" height="22" rx="3" class="s-thread grow-x" />
+<text x="125" y="164" class="t-mid t-small">profile</text>
+<rect x="80" y="178" width="150" height="22" rx="3" class="s-queue grow-x" />
+<text x="155" y="194" class="t-mid t-small">orders</text>
+<rect x="80" y="208" width="60" height="22" rx="3" class="s-work grow-x" />
+<text x="110" y="224" class="t-mid t-small">recs</text>
+</g>
+<g data-step="4">
+<path d="M230 140 V236" class="k-work" stroke-dasharray="4 3" />
+<text x="238" y="194" class="t-bold c-work">200 ms</text>
+<text x="238" y="210" class="c-work">= slowest</text>
+</g>
+<path d="M80 254 H380" class="line" />
+<path d="M80 250 V258 M155 250 V258 M230 250 V258 M305 250 V258 M380 250 V258" class="line" />
+<text x="80" y="274" class="t-small t-mid t-muted">0</text>
+<text x="155" y="274" class="t-small t-mid t-muted">100</text>
+<text x="230" y="274" class="t-small t-mid t-muted">200</text>
+<text x="305" y="274" class="t-small t-mid t-muted">300</text>
+<text x="372" y="274" class="t-small t-mid t-muted">400 ms</text>
+</svg>
+<ol class="step-notes">
+<li>One after another: the request thread calls the profile service and waits 120 ms.</li>
+<li>Then it calls orders (200 ms), then recommendations (80 ms). Each waits for the one before. Total: 400 ms, the <strong>sum</strong>.</li>
+<li>At the same time: three threads from an I/O pool start all three calls at once. Their waits overlap.</li>
+<li>The answer is ready when the slowest call (orders) returns: 200 ms, the <strong>maximum</strong>. Twice as fast, and no single call got any faster.</li>
+</ol>
+<figcaption><b>Figure 3.2</b> Parallel calls are fast because the waiting overlaps. Latency becomes the slowest call instead of the sum.</figcaption>
+</figure>
+</Stepper>
+
+Here is the same service both ways. The parallel version uses `CompletableFuture`, which Chapter 4 reads line by line. For now, just notice the shape: start all three, then wait for all three.
+
+<div class="compare">
+<div>
+<p class="compare-label">One after another (≈ 400 ms)</p>
+
+<p class="code-title">HomePageService.java</p>
+
+```java
+HomePage load(long userId) {
+    var profile = profiles.get(userId);
+    var orders  = orderClient.recent(userId);
+    var recs    = recClient.forUser(userId);
+    return new HomePage(profile, orders, recs);
+}
+```
+
+</div>
+<div>
+<p class="compare-label good">At the same time (≈ 200 ms)</p>
+
+<p class="code-title">HomePageService.java</p>
+
+```java
+HomePage load(long userId) {
+    var profile = supplyAsync(
+        () -> profiles.get(userId), ioPool);
+    var orders = supplyAsync(
+        () -> orderClient.recent(userId), ioPool);
+    var recs = supplyAsync(
+        () -> recClient.forUser(userId), ioPool);
+
+    return new HomePage(profile.join(),
+                        orders.join(), recs.join());
+}
+```
+
+</div>
+</div>
+
+(`supplyAsync` is statically imported from `CompletableFuture`; `ioPool` is a bounded executor like the one in [Chapter 2](../threads-futures-queues-2-pools-and-queues/#springs-async-and-its-executor).)
+
+This only works for calls that are **independent**. If you need the profile's region before you can ask for recommendations, those two have to stay in order. Finding which calls are independent is the first step in reading or writing any concurrent code.
+
+## Parallel I/O vs parallel CPU
+
+There are two very different kinds of "parallel", and they get mixed up a lot.
+
+- **I/O-bound** work (HTTP calls, DB queries, reading queues) is mostly waiting. You can overlap far more of it than you have cores, because waiting threads use no CPU. This is the kind that makes business services fast.
+- **CPU-bound** work (parsing a huge file, image resizing, heavy math) keeps a core busy the whole time. Splitting it helps only up to the number of cores. 4 cores can do 4 CPU tasks at once; the 5th waits.
+
+Most code you'll see at work with `CompletableFuture` is the first kind: fan out a few remote calls, then combine.
+
+## The math of "thousands per second"
+
+Here is the one formula worth remembering. It is called <dfn>Little's law</dfn>, and in plain words it says:
+
+<p class="formula">in progress at once = arrivals per second × seconds each one takes</p>
+
+In the kitchen: if 60 orders come in per hour and each spends 10 minutes being cooked, then on average 60 × (10/60) = **10 orders are in the kitchen at any moment**. If every order needs a cook for its whole 10 minutes, you need about 10 cooks.
+
+For a service: one instance gets **800 requests per second**. Five instances behind a load balancer make that 4,000 per second, "thousands per second". Each request holds a Tomcat thread for its whole duration. So:
+
+<Stepper>
+<figure class="fig stepper" id="fig-3-3">
+<svg viewBox="0 0 400 290" role="img" aria-labelledby="fig-3-3-t">
+<title id="fig-3-3-t">At 800 requests per second, 0.4 second requests need 320 threads, more than Tomcat's 200, so 120 wait. At 0.2 seconds, only 160 are needed.</title>
+<g data-only="1 2" class="is-off">
+<text x="20" y="28" class="t-big">800/s × 0.4 s = <tspan class="c-bad">320</tspan> at once</text>
+</g>
+<g data-only="3">
+<text x="20" y="28" class="t-big">800/s × 0.2 s = <tspan class="c-work">160</tspan> at once</text>
+</g>
+<text x="20" y="50" class="t-small t-muted">Each square = 10 requests in progress</text>
+<rect x="20" y="62" width="238" height="116" rx="8" class="box" />
+<text x="32" y="82" class="t-bold c-thread">Tomcat pool: 200 threads</text>
+<rect x="32" y="100" width="20" height="20" rx="3" class="box" />
+<rect x="32" y="100" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="54" y="100" width="20" height="20" rx="3" class="box" />
+<rect x="54" y="100" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="76" y="100" width="20" height="20" rx="3" class="box" />
+<rect x="76" y="100" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="98" y="100" width="20" height="20" rx="3" class="box" />
+<rect x="98" y="100" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="120" y="100" width="20" height="20" rx="3" class="box" />
+<rect x="120" y="100" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="142" y="100" width="20" height="20" rx="3" class="box" />
+<rect x="142" y="100" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="164" y="100" width="20" height="20" rx="3" class="box" />
+<rect x="164" y="100" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="186" y="100" width="20" height="20" rx="3" class="box" />
+<rect x="186" y="100" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="208" y="100" width="20" height="20" rx="3" class="box" />
+<rect x="208" y="100" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="230" y="100" width="20" height="20" rx="3" class="box" />
+<rect x="230" y="100" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="32" y="126" width="20" height="20" rx="3" class="box" />
+<rect x="32" y="126" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="54" y="126" width="20" height="20" rx="3" class="box" />
+<rect x="54" y="126" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="76" y="126" width="20" height="20" rx="3" class="box" />
+<rect x="76" y="126" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="98" y="126" width="20" height="20" rx="3" class="box" />
+<rect x="98" y="126" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="120" y="126" width="20" height="20" rx="3" class="box" />
+<rect x="120" y="126" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="142" y="126" width="20" height="20" rx="3" class="box" />
+<rect x="142" y="126" width="20" height="20" rx="3" class="f-thread" data-only="1 2 3" />
+<rect x="164" y="126" width="20" height="20" rx="3" class="box" />
+<rect x="164" y="126" width="20" height="20" rx="3" class="f-thread is-off" data-only="1 2" />
+<rect x="186" y="126" width="20" height="20" rx="3" class="box" />
+<rect x="186" y="126" width="20" height="20" rx="3" class="f-thread is-off" data-only="1 2" />
+<rect x="208" y="126" width="20" height="20" rx="3" class="box" />
+<rect x="208" y="126" width="20" height="20" rx="3" class="f-thread is-off" data-only="1 2" />
+<rect x="230" y="126" width="20" height="20" rx="3" class="box" />
+<rect x="230" y="126" width="20" height="20" rx="3" class="f-thread is-off" data-only="1 2" />
+<text x="32" y="168" class="t-small t-muted" data-only="3">4 squares free = 40 spare threads</text>
+<text x="32" y="168" class="t-small t-muted is-off" data-only="1 2">all 200 busy</text>
+<g data-step="2" data-only="2" class="is-off">
+<rect x="270" y="62" width="110" height="116" rx="8" class="k-bad" stroke-dasharray="4 4" />
+<text x="325" y="82" class="t-mid t-bold c-bad">waiting</text>
+<rect x="282" y="96" width="20" height="20" rx="3" class="f-bad blink-in" />
+<rect x="304" y="96" width="20" height="20" rx="3" class="f-bad blink-in" />
+<rect x="326" y="96" width="20" height="20" rx="3" class="f-bad blink-in" />
+<rect x="348" y="96" width="20" height="20" rx="3" class="f-bad blink-in" />
+<rect x="282" y="120" width="20" height="20" rx="3" class="f-bad blink-in" />
+<rect x="304" y="120" width="20" height="20" rx="3" class="f-bad blink-in" />
+<rect x="326" y="120" width="20" height="20" rx="3" class="f-bad blink-in" />
+<rect x="348" y="120" width="20" height="20" rx="3" class="f-bad blink-in" />
+<rect x="282" y="144" width="20" height="20" rx="3" class="f-bad blink-in" />
+<rect x="304" y="144" width="20" height="20" rx="3" class="f-bad blink-in" />
+<rect x="326" y="144" width="20" height="20" rx="3" class="f-bad blink-in" />
+<rect x="348" y="144" width="20" height="20" rx="3" class="f-bad blink-in" />
+</g>
+<g data-only="1" class="is-off">
+<text x="20" y="210">Sequential calls: each request takes 0.4 s.</text>
+<text x="20" y="230">How many are in progress at once?</text>
+</g>
+<g data-only="2" class="is-off">
+<text x="20" y="210" class="c-bad t-bold">Needs 320, pool has 200.</text>
+<text x="20" y="230">120 requests wait for a thread. Waiting adds</text>
+<text x="20" y="250">to their time, so even more pile up. Overload.</text>
+</g>
+<g data-only="3">
+<text x="20" y="210" class="c-work t-bold">Parallel calls: 0.2 s each → needs 160.</text>
+<text x="20" y="230">Fits in 200 with room to spare for bursts.</text>
+<text x="20" y="250">Same hardware, same traffic.</text>
+</g>
+</svg>
+<ol class="step-notes">
+<li>Sequential version: 400 ms per request. At 800 requests per second, 800 × 0.4 = 320 requests are in progress at any moment, each holding a thread.</li>
+<li>Tomcat only has 200 threads. The other 120 wait, and their wait makes them slower, which makes the pile bigger. This is how a service "falls over" without any bug.</li>
+<li>Parallel version: 200 ms per request. 800 × 0.2 = 160 in progress. It fits. Cutting latency in half cut the threads needed in half.</li>
+</ol>
+<figcaption><b>Figure 3.3</b> Little's law with real-ish numbers. Faster requests do not just please users; they need fewer threads for the same traffic.</figcaption>
+</figure>
+</Stepper>
+
+You can use the same formula on every pool in the service:
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Pool</th><th>Rate</th><th>Time held</th><th>Busy on average</th></tr>
+</thead>
+<tbody>
+<tr><td>Tomcat threads</td><td>800/s</td><td>0.2 s</td><td>160</td></tr>
+<tr><td>DB connections</td><td>800/s</td><td>0.015 s</td><td>12 (Hikari default is 10!)</td></tr>
+<tr><td>Kafka listener</td><td>300 msg/s</td><td>0.05 s</td><td>15 threads</td></tr>
+</tbody>
+</table>
+</div>
+
+These are averages. Real traffic comes in bursts, so leave headroom: a common rule of thumb is to size for your p99 latency, or 1.5 to 2 times the average. Chapter 7 shows how to watch the real numbers in production.
+
+<aside class="callout why">
+<p class="callout-title">Why it's fast</p>
+<ul>
+<li><strong>Waits overlap.</strong> Three 100 ms waits done together take 100 ms, not 300.</li>
+<li><strong>Threads are freed sooner.</strong> A request that finishes in half the time holds its thread half as long, so the same pool serves twice the traffic (Little's law).</li>
+<li><strong>The CPU never stands still.</strong> While one thread waits on the network, the core runs another one's green slice.</li>
+</ul>
+</aside>
+
+<aside class="callout watch">
+<p class="callout-title">Watch out</p>
+<p>The parallel version uses <em>more</em> threads per request, not fewer. In the example each request now also has 3 calls running on the I/O pool. By Little's law that pool has about 800 × (0.12 + 0.2 + 0.08) = <strong>320 tasks in progress</strong>. So Tomcat needs fewer threads, but the I/O pool needs a lot. Size it, bound it, and watch it, or you have just moved the pile-up. (Chapter 6 shows how virtual threads make this cost almost disappear.)</p>
+</aside>
+
+<aside class="callout recap">
+<p class="callout-title">Recap</p>
+<ol>
+<li>Most request time is waiting on I/O, not CPU work. Speed comes from overlapping the waits.</li>
+<li>Independent calls done at once take as long as the slowest one, not the sum.</li>
+<li>Little's law: in progress at once = rate × time. Halve the time and you halve the threads you need.</li>
+</ol>
+</aside>

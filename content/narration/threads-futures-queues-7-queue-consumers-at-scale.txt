@@ -1,0 +1,141 @@
+Queue consumers at scale. Part 7 of 8 of Threads, Futures and Queues.
+
+Your services pull messages off a queue and only run so many at once. This chapter shows where that "so many" is set, how to pick the number, and how to watch it in production so you notice trouble before your users do.
+
+In the kitchen: Delivery drivers line up outside the back door. That line is the message broker: Kafka, RabbitMQ or SQS. The drivers don't barge in. The kitchen opens the door and takes a few boxes when it has room.
+
+Just inside the door is a small shelf for boxes taken in but not yet unpacked. That is the prefetch buffer. A fixed number of cooks unpack boxes from the shelf, one each at a time. That is the listener concurrency.
+
+If the cooks slow down, the shelf stays full, the door stays shut, and the line outside grows. The kitchen is protected. The growing line is called lag, and it is the number you watch.
+
+# How a listener pulls work
+
+A web request is pushed at you: the caller decides when it arrives. A queue listener pulls: it asks the broker for more only when it is ready.
+
+That one difference gives you backpressure for free. Each listener thread runs a simple loop: fetch a few messages, process them one by one, confirm them (ack or commit), fetch again.
+
+Figure: Messages flow from the broker to a prefetch buffer to three listener threads. When listeners slow down, the buffer stays full and messages wait in the broker.
+
+# The knobs, broker by broker
+
+Every broker has the same two dials. Concurrency: how many messages are processed at once. Batch size: how many are pulled into memory ahead of time.
+
+The table compares Kafka, RabbitMQ and SQS: how many messages run at once, how many are pulled ahead, and the hard cap, which only Kafka has, its partition count.
+
+The code here sets listener concurrency on all three brokers: 6 for Kafka, 4 to 8 for RabbitMQ, and 20 messages in flight for SQS.
+
+Or set defaults for every listener in application.yml:
+
+The same limits set in application settings: Kafka concurrency 6 with 100 records per poll, RabbitMQ 4 to 8 consumers with a prefetch of 20.
+
+# Kafka: partitions are the ceiling
+
+In Kafka, one partition is read by exactly one consumer in a group at a time. Spring's concurrency = "6" starts 6 consumers, each with its own thread. More consumers than partitions just leaves some of them with nothing to do.
+
+Figure: Six partitions with concurrency 3 gives each consumer two partitions. With concurrency 8, two consumers sit idle.
+
+Messages in one partition are processed in order, by one thread. That's a feature: events for the same order id stay in sequence. It is also why you can't fix a slow Kafka consumer by just adding threads.
+
+# Kafka: the five-minute rule
+
+Kafka expects each consumer to call poll() again within max.poll.interval.ms (default 5 minutes). If one batch of 500 records takes longer than that, Kafka decides the consumer is dead and moves its partitions to someone else. That's a rebalance, and the slow batch may be processed twice.
+
+If each message is slow, lower max-poll-records. Don't just raise the timeout.
+
+# RabbitMQ: prefetch hoards messages
+
+With a prefetch of 250 and 4 consumers, one pod can hold 1,000 unacknowledged messages. If that pod is slow, those messages wait there while other pods sit idle. For slow messages, a small prefetch (1 to 20) spreads work more evenly.
+
+# Don't break the backpressure
+
+The pull loop only protects you if the listener method actually finishes the work before it returns. A common "speed-up" breaks that:
+
+Hands off and returns.
+
+The code here hands each Kafka message to another pool and returns at once, so the offset is committed before the work is done.
+
+Does the work in the listener.
+
+The fixed listener does the work right inside the listener thread, with concurrency 6.
+
+In the left version the listener grabs messages as fast as the broker can send them. They pile up in pool's queue, in your heap. The broker thinks they are done, so a crash loses them. Lag looks perfect while the service drowns.
+
+If one message needs several calls, make those calls in parallel inside the listener and wait for them before returning (the executor version from Chapter 6).
+
+# Sizing: how many at once?
+
+Use Little's law from Chapter 3: messages in flight = arrival rate times time per message.
+
+1. Peak rate: 1,500 messages or second (from your broker's metrics).
+
+2. Time per message: 40 milliseconds on average (from the listener timer below).
+
+3. In flight: 1,500 times 0.040 = 60 messages being processed at any moment.
+
+4. Add headroom for spikes and slow moments, say 1.5 times : about 90.
+
+5. Spread over 6 pods: 15 per pod. For Kafka, that also means at least 90 partitions, or fewer, faster consumers.
+
+These are example numbers. Plug in your own.
+
+Then check what each message touches. If every message holds a database connection, 15 consumers per pod needs at least 15 connections in that pod's pool (HikariCP's default is 10). The smallest limit along the path is your real concurrency.
+
+Why it matters: Too few consumers and lag grows all day. Too many and you overload the database, and adding threads makes things slower.
+
+The right number comes from measuring rate and time per message, not from guessing. That is why the next section is about watching.
+
+# Watching it: the metrics that matter
+
+Spring Boot Actuator with Micrometer publishes most of what you need. Expose it, and send it to Prometheus, Datadog or whatever your team uses:
+
+The settings here expose the health, metrics, Prometheus and thread dump endpoints, and turn on Tomcat thread metrics.
+
+The table lists the metrics to watch: live threads and thread states, Tomcat busy threads, executor activity and queue size, Kafka lag, listener timings, and queue depth from the broker.
+
+Boot binds the executor.* metrics for every ThreadPoolTaskExecutor bean it can see. A raw ExecutorService you built yourself is invisible unless you wrap it with Micrometer's ExecutorServiceMetrics.monitor(...). Another reason to build pools as Spring beans with clear names.
+
+Watch out: Virtual threads are not in jvm.threads.live. That metric counts platform threads only. With virtual threads on, a flat thread graph doesn't mean low concurrency. Watch in-flight work instead: Tomcat busy count, semaphore permits in use, listener timers, and lag.
+
+Also, lag alone can lie. Lag of 10,000 is fine if it drains in 5 seconds and terrible if it has been there for an hour. Watch the age of the oldest message where your broker reports it.
+
+# Thread dumps: a photo of every thread
+
+When something is stuck, a thread dump shows what every thread is doing right now. Take two or three, ten seconds apart. Threads stuck on the same line in all of them are your problem.
+
+The commands here take a thread dump over HTTP or with jcmd, write one that includes virtual threads, and count threads by state.
+
+What a stuck pricing thread looks like (trimmed):
+
+The thread dump shows a pricing thread stuck in a socket read inside PricingClient fetch.
+
+Read it bottom-up for your code (PricingClient.fetch, line 41), then top-down for what it is waiting on (a socket read). If 32 of 32 pricing- threads look like this, the pricing service is slow, and you're missing a read timeout.
+
+Name your threads (setThreadNamePrefix) and a dump reads like a list of owners. With names like pool-7-thread-3 it reads like a puzzle.
+
+# A simple dashboard
+
+Four panels per service answer "are we keeping up?" at a glance:
+
+Figure: A four-panel dashboard: thread count steady, executor near full with a growing queue, consumer lag climbing, and processing time p99 rising.
+
+A checklist for each service that pulls from a queue:
+
+1. Threads: jvm.threads.live is flat over a day. Alert on a steady climb.
+
+2. Pools: executor.active stays below max most of the time, and executor.queued stays near zero.
+
+3. Lag: drains after every spike. Alert when lag or oldest-message age keeps growing for several minutes.
+
+4. Time per message: p99 from the listener timer. A jump here usually explains the other three.
+
+5. Errors: listener failure count, dead-letter queue size, and Kafka rebalances in the logs.
+
+6. Downstream: DB pool usage (hikaricp.connections.active, hikaricp.connections.pending). The real limit often lives here.
+
+Recap:
+
+1. Listeners pull: concurrency caps work in progress, and prefetch or poll size caps what is held in memory. Kafka can't go past its partition count.
+
+2. Size with rate times time per message, then check the smallest downstream limit. Never hand off and return.
+
+3. Watch four things: threads, pool active or queued, lag (and its age), and time per message. Name your threads so dumps make sense.

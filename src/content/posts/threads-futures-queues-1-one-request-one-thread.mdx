@@ -1,0 +1,541 @@
+---
+title: "One request, one thread"
+date: 2026-11-20
+category: tech
+series:
+  id: threads-futures-queues
+  title: "Threads, Futures and Queues"
+part: 1
+partsTotal: 8
+tags: ["java", "concurrency", "spring-boot", "threads"]
+readingMinutes: 7
+summary: "Before futures and pools make sense, you need one picture in your head: a thread is a worker, and in a normal Spring Boot service every request gets its own worker. This chapter builds that picture, and shows why the number of workers is something you have to watch."
+---
+## What a thread is
+
+Your Java code is a list of instructions. A <dfn>thread</dfn> is one worker walking through those instructions, one line at a time.
+
+Each thread has its own *bookmark* (which line it is on) and its own small notepad for local variables and method calls. That notepad is called the <dfn>stack</dfn>. All threads share the same big storage room, the <dfn>heap</dfn>, where your objects live.
+
+A Java program can have many threads at once. That is how one JVM serves hundreds of users at the same time: hundreds of workers, each walking through the same code with different data.
+
+<aside class="callout analogy">
+<p class="callout-title">In the kitchen</p>
+<p>Think of a restaurant kitchen. Each <strong>cook</strong> is a thread. Every cook follows the same recipe book (your code), but each one is working on a different <strong>order ticket</strong> (a request), and keeps their own place in the recipe.</p>
+<p>We will use this kitchen all through the book.</p>
+</aside>
+
+## Cores run threads, a few at a time
+
+The CPU has a small number of <dfn>cores</dfn>. A core can run one thread at a time. A laptop might have 8 or more cores; a service container often gets 2 to 8.
+
+So how can 200 threads run on 4 cores? Two reasons.
+
+1. The operating system takes turns. It runs a thread for a short slice of time, then swaps in another. This swap is a <dfn>context switch</dfn>.
+2. Most threads in a web service are not running at all. They are asleep, waiting for the database or another service to answer. A sleeping thread does not need a core.
+
+Step through the picture below.
+
+<Stepper>
+<figure class="fig stepper" id="fig-1-1">
+<svg viewBox="0 0 400 300" role="img" aria-labelledby="fig-1-1-t">
+<title id="fig-1-1-t">Four CPU cores. Four threads run on them, more threads wait for a turn, and many more are asleep waiting on I/O.</title>
+<defs>
+<pattern id="hatch-1-1" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<rect width="2.5" height="6" class="f-wait" opacity=".45" />
+</pattern>
+</defs>
+<text x="20" y="26" class="t-bold">CPU: 4 cores</text>
+<g>
+<rect x="20" y="38" width="80" height="58" rx="8" class="box" />
+<rect x="113" y="38" width="80" height="58" rx="8" class="box" />
+<rect x="206" y="38" width="80" height="58" rx="8" class="box" />
+<rect x="299" y="38" width="80" height="58" rx="8" class="box" />
+<text x="60" y="56" class="t-small t-muted t-mid">core 1</text>
+<text x="153" y="56" class="t-small t-muted t-mid">core 2</text>
+<text x="246" y="56" class="t-small t-muted t-mid">core 3</text>
+<text x="339" y="56" class="t-small t-muted t-mid">core 4</text>
+</g>
+<g data-only="1 3">
+<rect x="34" y="64" width="52" height="22" rx="11" class="f-work" />
+<text x="60" y="79" class="t-on t-mid">T1</text>
+<rect x="127" y="64" width="52" height="22" rx="11" class="f-work" />
+<text x="153" y="79" class="t-on t-mid">T2</text>
+<rect x="220" y="64" width="52" height="22" rx="11" class="f-work" />
+<text x="246" y="79" class="t-on t-mid">T3</text>
+<rect x="313" y="64" width="52" height="22" rx="11" class="f-work" />
+<text x="339" y="79" class="t-on t-mid">T4</text>
+</g>
+<g data-only="2" class="is-off">
+<rect x="34" y="64" width="52" height="22" rx="11" class="f-work" />
+<text x="60" y="79" class="t-on t-mid">T5</text>
+<rect x="127" y="64" width="52" height="22" rx="11" class="f-work" />
+<text x="153" y="79" class="t-on t-mid">T6</text>
+<rect x="220" y="64" width="52" height="22" rx="11" class="f-work" />
+<text x="246" y="79" class="t-on t-mid">T7</text>
+<rect x="313" y="64" width="52" height="22" rx="11" class="f-work" />
+<text x="339" y="79" class="t-on t-mid">T8</text>
+</g>
+<g data-step="2">
+<text x="20" y="128" class="t-bold c-thread">Ready, waiting for a turn on a core</text>
+<g data-only="2" class="is-off">
+<rect x="20" y="138" width="52" height="22" rx="11" class="s-thread" />
+<text x="46" y="153" class="t-mid">T1</text>
+<rect x="80" y="138" width="52" height="22" rx="11" class="s-thread" />
+<text x="106" y="153" class="t-mid">T2</text>
+<rect x="140" y="138" width="52" height="22" rx="11" class="s-thread" />
+<text x="166" y="153" class="t-mid">T3</text>
+<rect x="200" y="138" width="52" height="22" rx="11" class="s-thread" />
+<text x="226" y="153" class="t-mid">T4</text>
+</g>
+<g data-only="3">
+<rect x="20" y="138" width="52" height="22" rx="11" class="s-thread" />
+<text x="46" y="153" class="t-mid">T5</text>
+<rect x="80" y="138" width="52" height="22" rx="11" class="s-thread" />
+<text x="106" y="153" class="t-mid">T6</text>
+<rect x="140" y="138" width="52" height="22" rx="11" class="s-thread" />
+<text x="166" y="153" class="t-mid">T7</text>
+<rect x="200" y="138" width="52" height="22" rx="11" class="s-thread" />
+<text x="226" y="153" class="t-mid">T8</text>
+</g>
+<text x="264" y="153" class="t-small t-muted">swap = context switch</text>
+</g>
+<g data-step="3">
+<text x="20" y="196" class="t-bold c-wait">Asleep, waiting on DB / HTTP</text>
+<text x="20" y="213" class="t-small t-muted">These use no core at all until the answer arrives.</text>
+<g class="pulse">
+<rect x="20" y="224" width="52" height="22" rx="11" class="s-wait" />
+<rect x="20" y="224" width="52" height="22" rx="11" class="hatch" fill="url(#hatch-1-1)" />
+<text x="46" y="239" class="t-mid">T9</text>
+<rect x="80" y="224" width="52" height="22" rx="11" class="s-wait" />
+<rect x="80" y="224" width="52" height="22" rx="11" class="hatch" fill="url(#hatch-1-1)" />
+<text x="106" y="239" class="t-mid">T10</text>
+<rect x="140" y="224" width="52" height="22" rx="11" class="s-wait" />
+<rect x="140" y="224" width="52" height="22" rx="11" class="hatch" fill="url(#hatch-1-1)" />
+<text x="166" y="239" class="t-mid">T11</text>
+<rect x="200" y="224" width="52" height="22" rx="11" class="s-wait" />
+<rect x="200" y="224" width="52" height="22" rx="11" class="hatch" fill="url(#hatch-1-1)" />
+<text x="226" y="239" class="t-mid">T12</text>
+<rect x="260" y="224" width="52" height="22" rx="11" class="s-wait" />
+<rect x="260" y="224" width="52" height="22" rx="11" class="hatch" fill="url(#hatch-1-1)" />
+<text x="286" y="239" class="t-mid">T13</text>
+<rect x="320" y="224" width="60" height="22" rx="11" class="s-wait" />
+<rect x="320" y="224" width="60" height="22" rx="11" class="hatch" fill="url(#hatch-1-1)" />
+<text x="350" y="239" class="t-mid">…T200</text>
+</g>
+<text x="20" y="280" class="t-small t-muted">Typical web service: few running, many asleep.</text>
+</g>
+</svg>
+<ol class="step-notes">
+<li>Four cores, four threads running (green). Each core runs exactly one thread at this instant.</li>
+<li>More threads want to run than there are cores. The OS pauses T1 to T4 and gives the cores to T5 to T8. Each swap is a context switch. It is quick, but not free.</li>
+<li>In a web service, most threads are asleep, waiting for a database or HTTP answer (amber). They cost memory, but no CPU. That is why 200 threads on 4 cores works fine.</li>
+</ol>
+<figcaption><b>Figure 1.1</b> Cores do the work. Threads take turns on them, and most threads in a service are simply waiting.</figcaption>
+</figure>
+</Stepper>
+
+## One request, one thread
+
+A normal Spring Boot web app (Spring MVC) runs inside an embedded **Tomcat** server. Tomcat keeps a group of ready threads, a <dfn>thread pool</dfn>. Their names look like `http-nio-8080-exec-1`, `exec-2`, and so on.
+
+When a request arrives, Tomcat hands it to one free thread. That thread runs your whole call stack: filter, controller, service, repository. It stays with that request until the response is written. Then it goes back to the pool for the next request.
+
+This is called <dfn>thread-per-request</dfn>. It is why plain Spring code is easy to read: everything for one request happens top to bottom, on one thread.
+
+<p class="code-title">OrderController.java</p>
+
+```java
+@RestController
+@RequestMapping("/orders")
+class OrderController {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(OrderController.class);
+
+    private final OrderService orders;
+
+    OrderController(OrderService orders) {
+        this.orders = orders;
+    }
+
+    @GetMapping("/{id}")
+    OrderView get(@PathVariable long id) {
+        log.info("on thread {}", Thread.currentThread().getName());
+        return orders.find(id); // this thread waits for the DB here
+    }
+}
+```
+
+<p class="code-title">log output</p>
+
+```text
+INFO [nio-8080-exec-3] c.e.orders.OrderController : on thread http-nio-8080-exec-3
+INFO [nio-8080-exec-7] c.e.orders.OrderController : on thread http-nio-8080-exec-7
+```
+
+Two requests, two different threads. Notice that Spring's default log pattern shows the thread name in brackets (shortened). That bracket is your first clue when reading logs from concurrent code.
+
+<Stepper>
+<figure class="fig stepper" id="fig-1-2">
+<svg viewBox="0 0 400 330" role="img" aria-labelledby="fig-1-2-t">
+<title id="fig-1-2-t">Timeline of one request: the client sends a request, a Tomcat thread runs the code, waits for the database, then replies and returns to the pool.</title>
+<defs>
+<marker id="ah-1-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" class="ah" />
+</marker>
+<pattern id="hatch-1-2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<rect width="2.5" height="6" class="f-wait" opacity=".45" />
+</pattern>
+</defs>
+<rect x="16" y="14" width="88" height="30" rx="6" class="box" />
+<text x="60" y="34" class="t-mid t-bold">Client</text>
+<rect x="140" y="14" width="120" height="30" rx="6" class="s-thread" />
+<text x="200" y="34" class="t-mid t-mono">exec-3</text>
+<rect x="296" y="14" width="88" height="30" rx="6" class="box" />
+<text x="340" y="34" class="t-mid t-bold">Database</text>
+<path d="M60 44 V312 M200 44 V312 M340 44 V312" class="line-soft" />
+<text x="392" y="318" class="t-small t-muted t-end">time ↓</text>
+<g data-step="1">
+<path d="M60 66 H190" class="line" marker-end="url(#ah-1-2)" />
+<text x="66" y="60" class="t-small t-mono">GET /orders/42</text>
+</g>
+<g data-step="2">
+<rect x="192" y="66" width="16" height="40" class="f-work grow-y" />
+<text x="186" y="90" class="t-small t-end">controller, service</text>
+</g>
+<g data-step="3">
+<path d="M210 106 H330" class="line" marker-end="url(#ah-1-2)" />
+<text x="214" y="100" class="t-small t-mono">SELECT …</text>
+<g class="pulse">
+<rect x="192" y="106" width="16" height="120" class="s-wait" />
+<rect x="192" y="106" width="16" height="120" class="hatch" fill="url(#hatch-1-2)" />
+</g>
+<rect x="332" y="106" width="16" height="120" class="f-thread" opacity=".35" />
+<text x="186" y="160" class="t-small t-end c-wait t-bold">waiting.</text>
+<text x="186" y="176" class="t-small t-end c-wait">can't do</text>
+<text x="186" y="190" class="t-small t-end c-wait">anything else</text>
+</g>
+<g data-step="4">
+<path d="M330 226 H210" class="line" marker-end="url(#ah-1-2)" />
+<text x="270" y="220" class="t-small t-mono t-mid">rows</text>
+<rect x="192" y="226" width="16" height="28" class="f-work grow-y" />
+<path d="M190 254 H70" class="line" marker-end="url(#ah-1-2)" />
+<text x="128" y="248" class="t-small t-mono t-mid">200 OK</text>
+</g>
+<g data-step="5">
+<rect x="140" y="272" width="120" height="30" rx="15" class="s-work blink-in" />
+<text x="200" y="291" class="t-mid">back to the pool</text>
+</g>
+</svg>
+<ol class="step-notes">
+<li>A request arrives. Tomcat picks a free thread from its pool: <code>http-nio-8080-exec-3</code>.</li>
+<li>The thread runs your controller and service code. This is real CPU work (green), usually very short.</li>
+<li>The service asks the database. The thread now <em>blocks</em>: it sleeps until the answer arrives. It holds on to the request the whole time.</li>
+<li>The rows come back. The thread wakes up, builds the JSON and sends the response.</li>
+<li>The thread is free again and goes back to the pool, ready for the next request.</li>
+</ol>
+<figcaption><b>Figure 1.2</b> One request on one thread. Most of the thread's time is spent waiting (amber), not working (green).</figcaption>
+</figure>
+</Stepper>
+
+## Tomcat's pool has a size
+
+Tomcat does not create a new thread for every request. It reuses a fixed set. By default the pool grows up to **200 threads**. These are the settings that matter, with their Spring Boot defaults:
+
+<p class="code-title">application.yaml (defaults shown)</p>
+
+```yaml
+server:
+  tomcat:
+    threads:
+      max: 200          # most requests handled at the same time
+      min-spare: 10     # threads kept alive even when quiet
+    max-connections: 8192  # open connections Tomcat will hold
+    accept-count: 100      # OS queue once max-connections is hit
+```
+
+The key number is `threads.max`. With 200 threads, **at most 200 requests can be in progress at once**. Request number 201 is accepted on a connection, but it waits until one of the 200 threads is free.
+
+So a pool is two things at once: a set of workers, and a *limit*. You will see this idea again and again in this book. Chapter 2 is all about it.
+
+<figure class="fig" id="fig-1-3">
+<svg viewBox="0 0 400 290" role="img" aria-labelledby="fig-1-3-t">
+<title id="fig-1-3-t">A grid of 200 squares, one per Tomcat thread: 8 working, 150 waiting on I/O, 42 free.</title>
+<defs>
+<pattern id="hatch-1-3" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<rect width="2.5" height="6" class="f-wait" opacity=".45" />
+</pattern>
+</defs>
+<text x="22" y="30" class="t-bold">200 Tomcat threads, one moment in time</text>
+<rect x="22" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="40" y="46" width="14" height="14" rx="3" class="f-work" />
+<rect x="58" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="76" y="46" width="14" height="14" rx="3" class="box" />
+<rect x="94" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="112" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="130" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="148" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="166" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="184" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="202" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="220" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="238" y="46" width="14" height="14" rx="3" class="f-work" />
+<rect x="256" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="274" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="292" y="46" width="14" height="14" rx="3" class="f-work" />
+<rect x="310" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="328" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="346" y="46" width="14" height="14" rx="3" class="s-wait" />
+<rect x="364" y="46" width="14" height="14" rx="3" class="box" />
+<rect x="22" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="40" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="58" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="76" y="64" width="14" height="14" rx="3" class="f-work" />
+<rect x="94" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="112" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="130" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="148" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="166" y="64" width="14" height="14" rx="3" class="box" />
+<rect x="184" y="64" width="14" height="14" rx="3" class="box" />
+<rect x="202" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="220" y="64" width="14" height="14" rx="3" class="box" />
+<rect x="238" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="256" y="64" width="14" height="14" rx="3" class="box" />
+<rect x="274" y="64" width="14" height="14" rx="3" class="box" />
+<rect x="292" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="310" y="64" width="14" height="14" rx="3" class="box" />
+<rect x="328" y="64" width="14" height="14" rx="3" class="box" />
+<rect x="346" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="364" y="64" width="14" height="14" rx="3" class="s-wait" />
+<rect x="22" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="40" y="82" width="14" height="14" rx="3" class="box" />
+<rect x="58" y="82" width="14" height="14" rx="3" class="f-work" />
+<rect x="76" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="94" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="112" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="130" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="148" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="166" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="184" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="202" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="220" y="82" width="14" height="14" rx="3" class="box" />
+<rect x="238" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="256" y="82" width="14" height="14" rx="3" class="box" />
+<rect x="274" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="292" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="310" y="82" width="14" height="14" rx="3" class="box" />
+<rect x="328" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="346" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="364" y="82" width="14" height="14" rx="3" class="s-wait" />
+<rect x="22" y="100" width="14" height="14" rx="3" class="box" />
+<rect x="40" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="58" y="100" width="14" height="14" rx="3" class="box" />
+<rect x="76" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="94" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="112" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="130" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="148" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="166" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="184" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="202" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="220" y="100" width="14" height="14" rx="3" class="box" />
+<rect x="238" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="256" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="274" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="292" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="310" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="328" y="100" width="14" height="14" rx="3" class="box" />
+<rect x="346" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="364" y="100" width="14" height="14" rx="3" class="s-wait" />
+<rect x="22" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="40" y="118" width="14" height="14" rx="3" class="f-work" />
+<rect x="58" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="76" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="94" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="112" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="130" y="118" width="14" height="14" rx="3" class="box" />
+<rect x="148" y="118" width="14" height="14" rx="3" class="box" />
+<rect x="166" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="184" y="118" width="14" height="14" rx="3" class="f-work" />
+<rect x="202" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="220" y="118" width="14" height="14" rx="3" class="box" />
+<rect x="238" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="256" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="274" y="118" width="14" height="14" rx="3" class="box" />
+<rect x="292" y="118" width="14" height="14" rx="3" class="box" />
+<rect x="310" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="328" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="346" y="118" width="14" height="14" rx="3" class="box" />
+<rect x="364" y="118" width="14" height="14" rx="3" class="s-wait" />
+<rect x="22" y="136" width="14" height="14" rx="3" class="box" />
+<rect x="40" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="58" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="76" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="94" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="112" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="130" y="136" width="14" height="14" rx="3" class="box" />
+<rect x="148" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="166" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="184" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="202" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="220" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="238" y="136" width="14" height="14" rx="3" class="f-work" />
+<rect x="256" y="136" width="14" height="14" rx="3" class="box" />
+<rect x="274" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="292" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="310" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="328" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="346" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="364" y="136" width="14" height="14" rx="3" class="s-wait" />
+<rect x="22" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="40" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="58" y="154" width="14" height="14" rx="3" class="box" />
+<rect x="76" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="94" y="154" width="14" height="14" rx="3" class="box" />
+<rect x="112" y="154" width="14" height="14" rx="3" class="box" />
+<rect x="130" y="154" width="14" height="14" rx="3" class="box" />
+<rect x="148" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="166" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="184" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="202" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="220" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="238" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="256" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="274" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="292" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="310" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="328" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="346" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="364" y="154" width="14" height="14" rx="3" class="s-wait" />
+<rect x="22" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="40" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="58" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="76" y="172" width="14" height="14" rx="3" class="box" />
+<rect x="94" y="172" width="14" height="14" rx="3" class="box" />
+<rect x="112" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="130" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="148" y="172" width="14" height="14" rx="3" class="box" />
+<rect x="166" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="184" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="202" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="220" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="238" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="256" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="274" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="292" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="310" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="328" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="346" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="364" y="172" width="14" height="14" rx="3" class="s-wait" />
+<rect x="22" y="190" width="14" height="14" rx="3" class="box" />
+<rect x="40" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="58" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="76" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="94" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="112" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="130" y="190" width="14" height="14" rx="3" class="box" />
+<rect x="148" y="190" width="14" height="14" rx="3" class="box" />
+<rect x="166" y="190" width="14" height="14" rx="3" class="box" />
+<rect x="184" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="202" y="190" width="14" height="14" rx="3" class="box" />
+<rect x="220" y="190" width="14" height="14" rx="3" class="box" />
+<rect x="238" y="190" width="14" height="14" rx="3" class="box" />
+<rect x="256" y="190" width="14" height="14" rx="3" class="box" />
+<rect x="274" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="292" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="310" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="328" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="346" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="364" y="190" width="14" height="14" rx="3" class="s-wait" />
+<rect x="22" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="40" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="58" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="76" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="94" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="112" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="130" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="148" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="166" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="184" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="202" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="220" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="238" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="256" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="274" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="292" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="310" y="208" width="14" height="14" rx="3" class="box" />
+<rect x="328" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="346" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="364" y="208" width="14" height="14" rx="3" class="s-wait" />
+<rect x="22" y="246" width="14" height="14" rx="3" class="f-work" />
+<text x="42" y="258">8 working</text>
+<rect x="128" y="246" width="14" height="14" rx="3" class="s-wait" />
+<text x="148" y="258">150 waiting on I/O</text>
+<rect x="286" y="246" width="14" height="14" rx="3" class="box" />
+<text x="306" y="258">42 free</text>
+<text x="22" y="280" class="t-small t-muted">Example numbers for a typical I/O-heavy service on 4 cores.</text>
+</svg>
+<figcaption><b>Figure 1.3</b> A snapshot of a busy service. Only a handful of threads are using the CPU. Most are parked, waiting for a database or another service. If the free squares run out, new requests have to wait.</figcaption>
+</figure>
+
+## Why the number of threads matters
+
+If threads are mostly asleep, why not just set `threads.max` to 5,000? Because every thread has a cost, even a sleeping one.
+
+### Memory
+
+Each regular Java thread is a real operating system thread. Each one gets its own stack. On 64-bit Linux the JVM reserves up to **1 MB** per stack by default (the `-Xss` setting). Only the pages actually used are backed by RAM, so real use is usually smaller, but it adds up: thousands of threads can mean gigabytes of reserved memory plus kernel bookkeeping.
+
+### Context switching
+
+When many threads are ready to run at once, the OS spends more time swapping them on and off the cores. Each swap is cheap (microseconds), but at thousands of swaps per second per core it shows up as wasted CPU, and the CPU caches keep going cold.
+
+### The next bottleneck
+
+More threads also means more requests hitting the *next* limit at once. A very common one: the database connection pool. HikariCP, Spring Boot's default, allows **10 connections** unless you change `spring.datasource.hikari.maximum-pool-size`. 200 Tomcat threads sharing 10 connections means up to 190 threads just waiting for a connection.
+
+<aside class="callout why">
+<p class="callout-title">Why it matters</p>
+<p>Thread count is your service's <strong>concurrency limit</strong>: how many things it can have in progress at once. Too few threads and requests queue up even though the CPU is idle. Too many and you burn memory and CPU on bookkeeping, and you overload whatever is downstream. Your team watches thread count because it tells you, at a glance, how close the service is to that limit.</p>
+</aside>
+
+<aside class="callout watch">
+<p class="callout-title">Watch out</p>
+<p>Raising <code>server.tomcat.threads.max</code> rarely fixes a slow service. If threads are all stuck waiting on a slow database, more threads just means more waiting, and a bigger pile-up when the database recovers. First find <em>what</em> they are waiting on (a thread dump tells you, below).</p>
+</aside>
+
+## Seeing your threads
+
+You can look at every thread in a running JVM. Three ways, from quickest to most detailed:
+
+- **Metric**: Spring Boot Actuator with Micrometer publishes `jvm.threads.live` (all threads), `jvm.threads.peak` and `jvm.threads.states` (how many are runnable, waiting, blocked). Chapter 7 builds a dashboard from these.
+- **Endpoint**: `GET /actuator/threaddump`, if you have exposed it.
+- **Command line**: `jcmd <pid> Thread.print` prints a thread dump.
+
+A thread dump is a list of every thread with its stack. Here is one Tomcat thread, waiting on Postgres:
+
+<p class="code-title">thread dump (trimmed)</p>
+
+```text
+"http-nio-8080-exec-3" #52 daemon prio=5 os_prio=0 tid=… nid=…
+   java.lang.Thread.State: RUNNABLE
+	at sun.nio.ch.SocketDispatcher.read0(Native Method)
+	at sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:…)
+	at org.postgresql.core.PGStream.receiveChar(PGStream.java:…)
+	at org.postgresql.jdbc.PgPreparedStatement.executeQuery(…)
+	at com.example.orders.OrderRepository.findById(…)
+	at com.example.orders.OrderService.find(…)
+	at com.example.orders.OrderController.get(…)
+```
+
+Read it bottom-up: controller called service, service called repository, repository is reading from the database socket. Odd but true: a thread blocked on a socket read often shows as `RUNNABLE`, not `WAITING`, because it is inside native code. Look at the top frames to see what it is really doing.
+
+<aside class="callout recap">
+<p class="callout-title">Recap</p>
+<ol>
+<li>A thread is a worker walking through your code. In Spring MVC each request gets one Tomcat thread, top to bottom.</li>
+<li>Tomcat's pool (200 threads by default) is also a limit: at most that many requests in progress at once.</li>
+<li>Threads cost memory and context switches even when asleep, so thread count is a number to watch, not to max out.</li>
+</ol>
+</aside>

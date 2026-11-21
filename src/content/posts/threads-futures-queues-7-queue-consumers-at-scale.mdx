@@ -1,0 +1,452 @@
+---
+title: "Queue consumers at scale"
+date: 2026-11-20
+category: tech
+series:
+  id: threads-futures-queues
+  title: "Threads, Futures and Queues"
+part: 7
+partsTotal: 8
+tags: ["java", "concurrency", "spring-boot", "messaging"]
+readingMinutes: 8
+summary: "Your services pull messages off a queue and only run so many at once. This chapter shows where that \"so many\" is set, how to pick the number, and how to watch it in production so you notice trouble before your users do."
+---
+<aside class="callout analogy">
+<p class="callout-title">In the kitchen</p>
+<p>Delivery drivers line up outside the back door. That line is the <dfn>message broker</dfn>: Kafka, RabbitMQ or SQS. The drivers don't barge in. The kitchen opens the door and takes a few boxes when it has room.</p>
+<p>Just inside the door is a small shelf for boxes taken in but not yet unpacked. That is the <dfn>prefetch</dfn> buffer. A fixed number of cooks unpack boxes from the shelf, one each at a time. That is the listener <dfn>concurrency</dfn>.</p>
+<p>If the cooks slow down, the shelf stays full, the door stays shut, and the line outside grows. The kitchen is protected. The growing line is called <dfn>lag</dfn>, and it is the number you watch.</p>
+</aside>
+
+## How a listener pulls work
+
+A web request is *pushed* at you: the caller decides when it arrives. A queue listener *pulls*: it asks the broker for more only when it is ready.
+
+That one difference gives you backpressure for free. Each listener thread runs a simple loop: fetch a few messages, process them one by one, confirm them (ack or commit), fetch again.
+
+<Stepper>
+<figure class="fig stepper" id="fig-7-1">
+<svg viewBox="0 0 400 265" role="img" aria-labelledby="fig-7-1-t">
+<title id="fig-7-1-t">Messages flow from the broker to a prefetch buffer to three listener threads. When listeners slow down, the buffer stays full and messages wait in the broker.</title>
+<defs>
+<marker id="ah-7-1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" class="ah" />
+</marker>
+<pattern id="hatch-7-1" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<rect width="2.5" height="6" class="f-wait" opacity=".45" />
+</pattern>
+</defs>
+<text x="50" y="24" class="t-bold t-mid">Broker</text>
+<text x="175" y="24" class="t-bold t-mid">Buffer</text>
+<text x="330" y="24" class="t-bold t-mid">Listeners</text>
+<rect x="10" y="34" width="80" height="176" rx="6" class="box" />
+<rect x="130" y="34" width="90" height="176" rx="6" class="box" />
+<path d="M92 120 H126" class="line" marker-end="url(#ah-7-1)" />
+<path d="M222 120 H262" class="line" marker-end="url(#ah-7-1)" />
+<text x="270" y="50" class="t-mono t-small">listener-1</text>
+<text x="270" y="110" class="t-mono t-small">listener-2</text>
+<text x="270" y="170" class="t-mono t-small">listener-3</text>
+<rect x="270" y="56" width="120" height="28" rx="6" class="box" />
+<rect x="270" y="116" width="120" height="28" rx="6" class="box" />
+<rect x="270" y="176" width="120" height="28" rx="6" class="box" />
+<g data-only="1" class="is-off">
+<rect x="20" y="44" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="62" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="80" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="98" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="116" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="134" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="152" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="170" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="188" width="60" height="14" rx="3" class="s-queue" />
+<text x="175" y="124" class="t-small t-mid t-muted">empty</text>
+<text x="330" y="75" class="t-small t-mid t-muted">idle</text>
+<text x="330" y="135" class="t-small t-mid t-muted">idle</text>
+<text x="330" y="195" class="t-small t-mid t-muted">idle</text>
+</g>
+<g data-only="2 3" class="is-off">
+<rect x="20" y="134" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="152" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="170" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="188" width="60" height="14" rx="3" class="s-queue" />
+</g>
+<g data-only="2" class="is-off">
+<rect x="140" y="44" width="70" height="20" rx="4" class="s-queue blink-in" />
+<rect x="140" y="70" width="70" height="20" rx="4" class="s-queue blink-in" />
+<rect x="140" y="96" width="70" height="20" rx="4" class="s-queue blink-in" />
+<rect x="140" y="122" width="70" height="20" rx="4" class="s-queue blink-in" />
+<rect x="140" y="148" width="70" height="20" rx="4" class="s-queue blink-in" />
+<rect x="140" y="174" width="70" height="20" rx="4" class="s-queue blink-in" />
+<text x="330" y="75" class="t-small t-mid t-muted">idle</text>
+<text x="330" y="135" class="t-small t-mid t-muted">idle</text>
+<text x="330" y="195" class="t-small t-mid t-muted">idle</text>
+</g>
+<g data-only="3" class="is-off">
+<rect x="140" y="122" width="70" height="20" rx="4" class="s-queue" />
+<rect x="140" y="148" width="70" height="20" rx="4" class="s-queue" />
+<rect x="140" y="174" width="70" height="20" rx="4" class="s-queue" />
+<rect x="270" y="56" width="120" height="28" rx="6" class="s-work grow-x" />
+<rect x="270" y="116" width="120" height="28" rx="6" class="s-work grow-x" />
+<rect x="270" y="176" width="120" height="28" rx="6" class="s-work grow-x" />
+<text x="330" y="75" class="t-small t-mid">processing</text>
+<text x="330" y="135" class="t-small t-mid">processing</text>
+<text x="330" y="195" class="t-small t-mid">processing</text>
+</g>
+<g data-only="4">
+<rect x="20" y="44" width="60" height="14" rx="3" class="s-bad blink-in" />
+<rect x="20" y="62" width="60" height="14" rx="3" class="s-bad blink-in" />
+<rect x="20" y="80" width="60" height="14" rx="3" class="s-bad blink-in" />
+<rect x="20" y="98" width="60" height="14" rx="3" class="s-bad blink-in" />
+<rect x="20" y="116" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="134" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="152" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="170" width="60" height="14" rx="3" class="s-queue" />
+<rect x="20" y="188" width="60" height="14" rx="3" class="s-queue" />
+<rect x="140" y="44" width="70" height="20" rx="4" class="s-queue" />
+<rect x="140" y="70" width="70" height="20" rx="4" class="s-queue" />
+<rect x="140" y="96" width="70" height="20" rx="4" class="s-queue" />
+<rect x="140" y="122" width="70" height="20" rx="4" class="s-queue" />
+<rect x="140" y="148" width="70" height="20" rx="4" class="s-queue" />
+<rect x="140" y="174" width="70" height="20" rx="4" class="s-queue" />
+<rect x="270" y="56" width="120" height="28" rx="6" class="s-wait pulse" />
+<rect x="270" y="56" width="120" height="28" rx="6" class="hatch" fill="url(#hatch-7-1)" />
+<rect x="270" y="116" width="120" height="28" rx="6" class="s-wait pulse" />
+<rect x="270" y="116" width="120" height="28" rx="6" class="hatch" fill="url(#hatch-7-1)" />
+<rect x="270" y="176" width="120" height="28" rx="6" class="s-wait pulse" />
+<rect x="270" y="176" width="120" height="28" rx="6" class="hatch" fill="url(#hatch-7-1)" />
+<text x="330" y="75" class="t-small t-mid">slow DB…</text>
+<text x="330" y="135" class="t-small t-mid">slow DB…</text>
+<text x="330" y="195" class="t-small t-mid">slow DB…</text>
+<text x="50" y="230" class="t-small t-mid c-bad t-bold">lag grows</text>
+<text x="175" y="230" class="t-small t-mid">full: no fetch</text>
+<text x="330" y="230" class="t-small t-mid">still only 3</text>
+</g>
+<text x="200" y="256" class="t-small t-mid t-muted">the pull pauses, the app stays safe</text>
+</svg>
+<ol class="step-notes">
+<li>Messages wait in the broker. Three listener threads are idle and ask for work.</li>
+<li>The container fetches a batch into memory: Kafka's <code>max.poll.records</code>, Rabbit's <code>prefetch</code>, SQS's <code>maxMessagesPerPoll</code>.</li>
+<li>Each listener thread takes one message and processes it. When the buffer runs low, the container fetches again.</li>
+<li>The database slows down. The listeners take longer, the buffer stays full, and nothing new is fetched. Messages pile up in the broker, not in your heap. That pile-up is lag.</li>
+</ol>
+<figcaption><b>Figure 7.1</b> The pull loop. Slow consumers don't crash; they fall behind, and lag tells you so.</figcaption>
+</figure>
+</Stepper>
+
+## The knobs, broker by broker
+
+Every broker has the same two dials. **Concurrency**: how many messages are processed at once. **Batch size**: how many are pulled into memory ahead of time.
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th></th><th>Kafka</th><th>RabbitMQ</th><th>SQS (Spring Cloud AWS)</th></tr>
+</thead>
+<tbody>
+<tr><td>At once</td><td><code>concurrency</code> (consumer threads; 1 if not set)</td><td><code>concurrency</code>, <code>max-concurrency</code></td><td><code>maxConcurrentMessages</code> (default 10)</td></tr>
+<tr><td>Pulled ahead</td><td><code>max.poll.records</code> (default 500)</td><td><code>prefetch</code> (default 250 per consumer)</td><td><code>maxMessagesPerPoll</code> (default 10)</td></tr>
+<tr><td>Hard cap</td><td>Number of partitions</td><td>None in the broker</td><td>None in the broker</td></tr>
+</tbody>
+</table>
+</div>
+
+<p class="code-title">Listeners.java</p>
+
+```java
+@KafkaListener(topics = "orders", concurrency = "6")
+void onOrder(OrderEvent event) { … }
+
+@RabbitListener(queues = "invoices", concurrency = "4-8")
+void onInvoice(InvoiceMessage msg) { … }
+
+@SqsListener(value = "shipments",
+        maxConcurrentMessages = "20",
+        maxMessagesPerPoll = "10")
+void onShipment(ShipmentMessage msg) { … }
+```
+
+Or set defaults for every listener in `application.yml`:
+
+<p class="code-title">application.yml</p>
+
+```yaml
+spring:
+  kafka:
+    listener:
+      concurrency: 6
+    consumer:
+      max-poll-records: 100
+  rabbitmq:
+    listener:
+      simple:
+        concurrency: 4
+        max-concurrency: 8
+        prefetch: 20
+```
+
+### Kafka: partitions are the ceiling
+
+In Kafka, one partition is read by exactly one consumer in a group at a time. Spring's `concurrency = "6"` starts 6 consumers, each with its own thread. More consumers than partitions just leaves some of them with nothing to do.
+
+<figure class="fig" id="fig-7-2">
+<svg viewBox="0 0 400 300" role="img" aria-labelledby="fig-7-2-t">
+<title id="fig-7-2-t">Six partitions with concurrency 3 gives each consumer two partitions. With concurrency 8, two consumers sit idle.</title>
+<text x="10" y="20" class="t-bold">6 partitions, concurrency 3</text>
+<g>
+<rect x="12" y="32" width="56" height="26" rx="6" class="s-queue" />
+<text x="40" y="49" class="t-small t-mid">P0</text>
+<rect x="76" y="32" width="56" height="26" rx="6" class="s-queue" />
+<text x="104" y="49" class="t-small t-mid">P1</text>
+<rect x="140" y="32" width="56" height="26" rx="6" class="s-queue" />
+<text x="168" y="49" class="t-small t-mid">P2</text>
+<rect x="204" y="32" width="56" height="26" rx="6" class="s-queue" />
+<text x="232" y="49" class="t-small t-mid">P3</text>
+<rect x="268" y="32" width="56" height="26" rx="6" class="s-queue" />
+<text x="296" y="49" class="t-small t-mid">P4</text>
+<rect x="332" y="32" width="56" height="26" rx="6" class="s-queue" />
+<text x="360" y="49" class="t-small t-mid">P5</text>
+<path d="M40 58 L72 96 M104 58 L72 96 M168 58 L200 96 M232 58 L200 96 M296 58 L328 96 M360 58 L328 96" class="line" />
+<rect x="22" y="96" width="100" height="28" rx="6" class="s-thread" />
+<text x="72" y="114" class="t-small t-mid">consumer 1</text>
+<rect x="150" y="96" width="100" height="28" rx="6" class="s-thread" />
+<text x="200" y="114" class="t-small t-mid">consumer 2</text>
+<rect x="278" y="96" width="100" height="28" rx="6" class="s-thread" />
+<text x="328" y="114" class="t-small t-mid">consumer 3</text>
+</g>
+<path d="M10 146 H390" class="line-soft" />
+<text x="10" y="172" class="t-bold">6 partitions, concurrency 8</text>
+<g>
+<rect x="12" y="184" width="56" height="26" rx="6" class="s-queue" />
+<text x="40" y="201" class="t-small t-mid">P0</text>
+<rect x="76" y="184" width="56" height="26" rx="6" class="s-queue" />
+<text x="104" y="201" class="t-small t-mid">P1</text>
+<rect x="140" y="184" width="56" height="26" rx="6" class="s-queue" />
+<text x="168" y="201" class="t-small t-mid">P2</text>
+<rect x="204" y="184" width="56" height="26" rx="6" class="s-queue" />
+<text x="232" y="201" class="t-small t-mid">P3</text>
+<rect x="268" y="184" width="56" height="26" rx="6" class="s-queue" />
+<text x="296" y="201" class="t-small t-mid">P4</text>
+<rect x="332" y="184" width="56" height="26" rx="6" class="s-queue" />
+<text x="360" y="201" class="t-small t-mid">P5</text>
+<path d="M40 210 L32 244 M104 210 L80 244 M168 210 L128 244 M232 210 L176 244 M296 210 L224 244 M360 210 L272 244" class="line" />
+<rect x="12" y="244" width="40" height="26" rx="6" class="s-thread" />
+<text x="32" y="261" class="t-small t-mid">c1</text>
+<rect x="60" y="244" width="40" height="26" rx="6" class="s-thread" />
+<text x="80" y="261" class="t-small t-mid">c2</text>
+<rect x="108" y="244" width="40" height="26" rx="6" class="s-thread" />
+<text x="128" y="261" class="t-small t-mid">c3</text>
+<rect x="156" y="244" width="40" height="26" rx="6" class="s-thread" />
+<text x="176" y="261" class="t-small t-mid">c4</text>
+<rect x="204" y="244" width="40" height="26" rx="6" class="s-thread" />
+<text x="224" y="261" class="t-small t-mid">c5</text>
+<rect x="252" y="244" width="40" height="26" rx="6" class="s-thread" />
+<text x="272" y="261" class="t-small t-mid">c6</text>
+<rect x="300" y="244" width="40" height="26" rx="6" class="s-bad" />
+<text x="320" y="261" class="t-small t-mid">c7</text>
+<rect x="348" y="244" width="40" height="26" rx="6" class="s-bad" />
+<text x="368" y="261" class="t-small t-mid">c8</text>
+<text x="368" y="290" class="t-small t-end c-bad">c7, c8 idle: no partition</text>
+</g>
+</svg>
+<figcaption><b>Figure 7.2</b> Kafka concurrency can't go past the partition count. Across all pods, total consumers should be ≤ partitions.</figcaption>
+</figure>
+
+Messages in one partition are processed in order, by one thread. That's a feature: events for the same order id stay in sequence. It is also why you can't fix a slow Kafka consumer by just adding threads.
+
+### Kafka: the five-minute rule
+
+Kafka expects each consumer to call `poll()` again within `max.poll.interval.ms` (default 5 minutes). If one batch of 500 records takes longer than that, Kafka decides the consumer is dead and moves its partitions to someone else. That's a <dfn>rebalance</dfn>, and the slow batch may be processed twice.
+
+If each message is slow, lower `max-poll-records`. Don't just raise the timeout.
+
+### RabbitMQ: prefetch hoards messages
+
+With a prefetch of 250 and 4 consumers, one pod can hold 1,000 unacknowledged messages. If that pod is slow, those messages wait there while other pods sit idle. For slow messages, a small prefetch (1 to 20) spreads work more evenly.
+
+## Don't break the backpressure
+
+The pull loop only protects you if the listener method actually *finishes the work* before it returns. A common "speed-up" breaks that:
+
+<div class="compare">
+<div>
+<p class="compare-label bad">Hands off and returns</p>
+
+```java
+@KafkaListener(topics = "orders")
+void onOrder(OrderEvent e) {
+  // returns at once; offset is
+  // committed before work is done
+  CompletableFuture.runAsync(
+      () -> handle(e), pool);
+}
+```
+
+</div>
+<div>
+<p class="compare-label good">Does the work in the listener</p>
+
+```java
+@KafkaListener(topics = "orders",
+               concurrency = "6")
+void onOrder(OrderEvent e) {
+  handle(e); // blocks this thread;
+             // that is the point
+}
+```
+
+</div>
+</div>
+
+In the left version the listener grabs messages as fast as the broker can send them. They pile up in `pool`'s queue, in your heap. The broker thinks they are done, so a crash loses them. Lag looks perfect while the service drowns.
+
+If one message needs several calls, make those calls in parallel *inside* the listener and wait for them before returning (the executor version from [Chapter 6](../threads-futures-queues-6-the-readable-way-virtual-threads/#parallel-calls-written-plainly)).
+
+## Sizing: how many at once?
+
+Use Little's law from [Chapter 3](../threads-futures-queues-3-why-its-fast/): **messages in flight = arrival rate × time per message**.
+
+1. Peak rate: **1,500 messages/second** (from your broker's metrics).
+2. Time per message: **40 ms** on average (from the listener timer below).
+3. In flight: 1,500 × 0.040 = **60** messages being processed at any moment.
+4. Add headroom for spikes and slow moments, say 1.5×: about **90**.
+5. Spread over 6 pods: **15 per pod**. For Kafka, that also means at least 90 partitions, or fewer, faster consumers.
+
+These are example numbers. Plug in your own.
+
+Then check what each message *touches*. If every message holds a database connection, 15 consumers per pod needs at least 15 connections in that pod's pool (HikariCP's default is 10). The smallest limit along the path is your real concurrency.
+
+<aside class="callout why">
+<p class="callout-title">Why it matters</p>
+<p>Too few consumers and lag grows all day. Too many and you overload the database, and adding threads makes things <em>slower</em>.</p>
+<p>The right number comes from measuring rate and time per message, not from guessing. That is why the next section is about watching.</p>
+</aside>
+
+## Watching it: the metrics that matter
+
+Spring Boot Actuator with Micrometer publishes most of what you need. Expose it, and send it to Prometheus, Datadog or whatever your team uses:
+
+<p class="code-title">application.properties</p>
+
+```properties
+management.endpoints.web.exposure.include=health,metrics,prometheus,threaddump
+# Tomcat thread metrics are off unless this is on:
+server.tomcat.mbeanregistry.enabled=true
+```
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Metric</th><th>What it tells you</th></tr>
+</thead>
+<tbody>
+<tr><td><code>jvm.threads.live</code>, <code>jvm.threads.peak</code></td><td>Platform threads in the JVM. A steady climb means a thread leak, often an unbounded pool.</td></tr>
+<tr><td><code>jvm.threads.states</code></td><td>Threads by state. Lots of <code>blocked</code> means lock contention.</td></tr>
+<tr><td><code>tomcat.threads.busy</code> vs <code>tomcat.threads.config.max</code></td><td>How close the request pool is to full (200 by default).</td></tr>
+<tr><td><code>executor.active</code> vs <code>executor.pool.max</code></td><td>How busy each <code>ThreadPoolTaskExecutor</code> is. Tagged with the bean name.</td></tr>
+<tr><td><code>executor.queued</code></td><td>Tasks waiting for a thread. Should hover near zero. A steady climb is trouble.</td></tr>
+<tr><td><code>kafka.consumer.fetch.manager.records.lag.max</code></td><td>Kafka lag: how far behind the consumer is, in messages.</td></tr>
+<tr><td><code>spring.kafka.listener</code>, <code>spring.rabbitmq.listener</code></td><td>Timers for time per message, and the success/failure count.</td></tr>
+<tr><td>Queue depth, from the broker</td><td>RabbitMQ: messages ready. SQS (CloudWatch): <code>ApproximateNumberOfMessagesVisible</code> and <code>ApproximateAgeOfOldestMessage</code>.</td></tr>
+</tbody>
+</table>
+</div>
+
+Boot binds the `executor.*` metrics for every `ThreadPoolTaskExecutor` bean it can see. A raw `ExecutorService` you built yourself is invisible unless you wrap it with Micrometer's `ExecutorServiceMetrics.monitor(…)`. Another reason to build pools as Spring beans with clear names.
+
+<aside class="callout watch">
+<p class="callout-title">Watch out</p>
+<p><strong>Virtual threads are not in <code>jvm.threads.live</code>.</strong> That metric counts platform threads only. With virtual threads on, a flat thread graph doesn't mean low concurrency. Watch in-flight work instead: Tomcat busy count, semaphore permits in use, listener timers, and lag.</p>
+<p>Also, lag alone can lie. Lag of 10,000 is fine if it drains in 5 seconds and terrible if it has been there for an hour. Watch the <em>age</em> of the oldest message where your broker reports it.</p>
+</aside>
+
+### Thread dumps: a photo of every thread
+
+When something is stuck, a <dfn>thread dump</dfn> shows what every thread is doing right now. Take two or three, ten seconds apart. Threads stuck on the same line in all of them are your problem.
+
+<p class="code-title">Taking a dump</p>
+
+```bash
+# platform threads, over HTTP (Actuator)
+curl -s localhost:8080/actuator/threaddump -H 'Accept: text/plain'
+
+# platform threads, on the box
+jcmd <pid> Thread.print
+
+# includes virtual threads (Java 21+)
+jcmd <pid> Thread.dump_to_file -format=json /tmp/threads.json
+
+# quick summary: how many threads in each state
+jcmd <pid> Thread.print | grep 'Thread.State' | sort | uniq -c
+```
+
+What a stuck pricing thread looks like (trimmed):
+
+```text
+"pricing-17" #93 prio=5 os_prio=0 runnable
+   java.lang.Thread.State: RUNNABLE
+    at sun.nio.ch.Net.poll(Native Method)
+    at sun.nio.ch.NioSocketImpl.timedRead(...)
+    at java.net.Socket$SocketInputStream.read(...)
+    ...
+    at com.acme.pricing.PricingClient.fetch(PricingClient.java:41)
+```
+
+Read it bottom-up for *your* code (`PricingClient.fetch`, line 41), then top-down for *what it is waiting on* (a socket read). If 32 of 32 `pricing-` threads look like this, the pricing service is slow, and you're missing a read timeout.
+
+Name your threads (`setThreadNamePrefix`) and a dump reads like a list of owners. With names like `pool-7-thread-3` it reads like a puzzle.
+
+## A simple dashboard
+
+Four panels per service answer "are we keeping up?" at a glance:
+
+<figure class="fig" id="fig-7-3">
+<svg viewBox="0 0 400 280" role="img" aria-labelledby="fig-7-3-t">
+<title id="fig-7-3-t">A four-panel dashboard: thread count steady, executor near full with a growing queue, consumer lag climbing, and processing time p99 rising.</title>
+<rect x="6" y="6" width="190" height="128" rx="6" class="box" />
+<text x="16" y="26" class="t-bold">1 · Threads</text>
+<text x="16" y="42" class="t-small t-muted">jvm.threads.live</text>
+<path d="M16 110 H186" class="line-soft" />
+<polyline points="16,90 40,88 64,89 88,87 112,88 136,88 160,87 186,88" fill="none" class="k-thread" stroke-width="2.5" />
+<text x="16" y="126" class="t-small c-work">142, flat: good</text>
+<rect x="204" y="6" width="190" height="128" rx="6" class="box" />
+<text x="214" y="26" class="t-bold">2 · Pool</text>
+<text x="214" y="42" class="t-small t-muted">executor.active / .queued</text>
+<rect x="214" y="56" width="170" height="16" rx="4" class="box" />
+<rect x="214" y="56" width="159" height="16" rx="4" class="f-thread grow-x" />
+<text x="214" y="88" class="t-small">active 30 / max 32</text>
+<rect x="214" y="96" width="170" height="10" rx="3" class="box" />
+<rect x="214" y="96" width="120" height="10" rx="3" class="f-bad" />
+<text x="214" y="126" class="t-small c-bad">queued 410, rising</text>
+<rect x="6" y="144" width="190" height="128" rx="6" class="box" />
+<text x="16" y="164" class="t-bold">3 · Lag</text>
+<text x="16" y="180" class="t-small t-muted">records.lag.max</text>
+<path d="M16 246 H186" class="line-soft" />
+<polyline points="16,240 40,239 64,238 88,236 112,228 136,214 160,200 186,186" fill="none" class="k-bad" stroke-width="2.5" />
+<text x="16" y="264" class="t-small c-bad">climbing for 20 min</text>
+<rect x="204" y="144" width="190" height="128" rx="6" class="box" />
+<text x="214" y="164" class="t-bold">4 · Time per msg</text>
+<text x="214" y="180" class="t-small t-muted">listener timer, p99</text>
+<path d="M214 246 H384" class="line-soft" />
+<polyline points="214,236 238,236 262,235 286,234 310,222 334,210 358,205 384,203" fill="none" class="k-wait" stroke-width="2.5" />
+<text x="214" y="264" class="t-small c-wait">40 ms → 180 ms</text>
+</svg>
+<figcaption><b>Figure 7.3</b> Read it as a story: time per message went up (4), so the pool filled (2) and lag grew (3). Threads stayed flat (1). The cause is downstream, not a thread leak.</figcaption>
+</figure>
+
+A checklist for each service that pulls from a queue:
+
+1. **Threads:** `jvm.threads.live` is flat over a day. Alert on a steady climb.
+2. **Pools:** `executor.active` stays below max most of the time, and `executor.queued` stays near zero.
+3. **Lag:** drains after every spike. Alert when lag or oldest-message age keeps growing for several minutes.
+4. **Time per message:** p99 from the listener timer. A jump here usually explains the other three.
+5. **Errors:** listener failure count, dead-letter queue size, and Kafka rebalances in the logs.
+6. **Downstream:** DB pool usage (`hikaricp.connections.active`, `hikaricp.connections.pending`). The real limit often lives here.
+
+<aside class="callout recap">
+<p class="callout-title">Recap</p>
+<ol>
+<li>Listeners pull: concurrency caps work in progress, and prefetch / poll size caps what is held in memory. Kafka can't go past its partition count.</li>
+<li>Size with rate × time per message, then check the smallest downstream limit. Never hand off and return.</li>
+<li>Watch four things: threads, pool active/queued, lag (and its age), and time per message. Name your threads so dumps make sense.</li>
+</ol>
+</aside>

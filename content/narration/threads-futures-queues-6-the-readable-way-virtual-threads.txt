@@ -1,0 +1,149 @@
+The readable way: virtual threads. Part 6 of 8 of Threads, Futures and Queues.
+
+You asked whether there is something more readable than CompletableFuture chains. Since Java 21, there is. Virtual threads let you write plain, top-to-bottom blocking code and still handle thousands of waiting calls at once.
+
+In the kitchen: So far, a cook who puts bread in the oven has to stand there until it is done. That is why we needed buzzers and callbacks.
+
+Now imagine cooks who can step away from the oven. They clip their ticket to the oven door, and a free station picks up someone else's ticket. When the bread is ready, the ticket goes back in line for the next free station.
+
+The kitchen has only a few real stations, the carrier threads. But it can have thousands of "cooks on paper", the virtual threads, because a cook who is waiting takes up no station at all.
+
+# What a virtual thread is
+
+A normal Java thread, now called a platform thread, is a thin wrapper around an operating system thread. Each one reserves its own stack (on 64-bit Linux the default reservation is about 1 MB) and the OS has to schedule it. That is one reason Tomcat's pool stops at 200 by default.
+
+A virtual thread is a thread the JVM manages itself. Its stack lives on the heap and grows only as needed, so a waiting virtual thread costs little memory. You can have hundreds of thousands of them.
+
+Virtual threads run on top of a small pool of platform threads called carriers, roughly one per CPU core. The trick is what happens when the code blocks:
+
+Figure: Two carrier threads run virtual threads. When a virtual thread blocks on I O it is parked, and the carrier runs another one.
+
+From your code's point of view, nothing special happened. restClient.get()...body(Profile.class) blocked and then returned a value. The JVM did the juggling that CompletableFuture made you do by hand.
+
+# Turn it on in Spring Boot
+
+On Java 21 or later with Spring Boot 3.2 or later, it is one property:
+
+The setting here turns on virtual threads in Spring Boot with one line.
+
+That one switch changes several things:
+
+Tomcat (and Jetty) handle each request on a new virtual thread instead of the 200-thread pool.
+
+The @Async executor becomes a SimpleAsyncTaskExecutor that starts a virtual thread per task.
+
+The task scheduler uses virtual threads too.
+
+Kafka and RabbitMQ listener containers get a virtual-thread executor. (How many consumers run is still set by the container's concurrency. More in Chapter 7.)
+
+Your controller code doesn't change at all. This is ordinary blocking code, and on virtual threads it scales:
+
+The code here is an ordinary blocking controller that fetches a profile with RestClient; on a virtual thread the wait costs no carrier thread.
+
+# Parallel calls, written plainly
+
+Virtual threads don't make calls parallel by themselves. One request still runs top to bottom. To call three services at the same time, start three virtual threads and wait for all of them.
+
+Here is the three-call home page from Chapter 3 again, as a DashboardService, written both ways. Both make three calls in parallel, so both take as long as the slowest call.
+
+With CompletableFuture.
+
+The code here builds a dashboard the CompletableFuture way: three async calls on an I/O pool, a 500 millisecond fallback for recommendations, and allOf to combine them.
+
+With virtual threads.
+
+The same dashboard written with a virtual-thread-per-task executor: submit three calls, get each result, give recommendations 500 milliseconds before cancelling them, and let the try block close the executor.
+
+1. An executor that starts a brand-new virtual thread for every task. No pool to size. It is AutoCloseable, so it lives in a try block.
+
+2. submit starts the call right away and returns a plain Future.
+
+3. get() blocks until the profile is ready. Blocking is fine here, because the request itself runs on a virtual thread.
+
+4. A timeout reads like a normal try or catch. And here cancel(true) really does interrupt the call, which a CompletableFuture can't do.
+
+5. Leaving the try block waits for every task to finish. No thread is left running after the method returns.
+
+The right-hand version has no thenApply, no allOf, no hidden thread hops. Exceptions come out of get() as a normal ExecutionException that you can catch. And a stack trace shows the real call path.
+
+# Cap concurrency with a Semaphore
+
+Here is the catch. A thread pool used to limit you for free: 32 threads meant at most 32 calls at once. With virtual threads there is no pool, so there is no limit.
+
+Your downstream systems still have limits. HikariCP's database pool defaults to 10 connections. A partner API might allow 20 calls at a time. Ten thousand virtual threads all calling it at once is an outage.
+
+So you add the limit back, on purpose, right where it belongs. A Semaphore is a counter of permits. acquire() takes one, waiting if none is left. release() gives it back.
+
+Figure: Hundreds of virtual threads wait at a semaphore with 20 permits, so only 20 calls reach the partner API at once.
+
+The code here guards a partner API with a semaphore of 20 permits, acquiring one before each call and releasing it in a finally block.
+
+1. At most 20 calls at once, across every thread in this app instance.
+
+2. The 21st caller waits here. On a virtual thread, that wait is cheap.
+
+3. Always release in finally, or a failed call leaks a permit forever.
+
+Two Spring shortcuts do the same job:
+
+Spring Framework 7 (Spring Boot 4) adds @ConcurrencyLimit(20) on a method. It only takes effect if a @Configuration class has @EnableResilientMethods.
+
+For @Async on virtual threads, set spring.task.execution.simple.concurrency-limit. Otherwise there is no limit at all.
+
+# Structured concurrency (still a preview)
+
+The newVirtualThreadPerTaskExecutor version has one weak spot. If the orders call fails, orders.get() throws, but the recommendations call keeps running. Closing the executor then waits for it anyway.
+
+Structured concurrency fixes that. You open a scope, fork subtasks into it, and join. If one subtask fails, the scope cancels the others. When the block ends, every subtask has ended too.
+
+The code here uses the preview StructuredTaskScope to fork the three dashboard calls and join them, cancelling the others if one fails.
+
+Status check (November 2026):
+
+Structured concurrency is a preview API in every released Java so far. Java 21 to 24 had previews, Java 25 the fifth (JEP 505), Java 26 the sixth (JEP 525), Java 27 the seventh (JEP 533).
+
+The API changed between previews. In Java 27, join() throws ExecutionException. Earlier previews threw StructuredTaskScope.FailedException, and the Java 21 preview used different classes again.
+
+JEP 543 makes it final in Java 28, with no planned API changes from Java 27. Java 28 is due in March 2027 and isn't released yet.
+
+Scoped values, a safer replacement for some ThreadLocal uses, are already final as of Java 25 (JEP 506).
+
+So for production code today, use the executor version, and keep an eye on Java 28.
+
+# Pinning, and its current status
+
+A virtual thread is pinned when it blocks but can't unmount, so it holds its carrier the whole time. With only a few carriers, a few pinned threads can stall everything, exactly like Figure 5.1.
+
+The table shows that on Java 21 to 23, blocking inside synchronized pins the carrier thread, and from Java 24, with JEP 491, that is fixed; Java 25 is the first long-term release with the fix.
+
+Even on Java 24+, a few rare cases still pin. The main one: native code (JNI or the Foreign Function API) that calls back into Java, which then blocks. Blocking inside a class initializer is another. Ordinary Spring code rarely hits these.
+
+To check, record with Java Flight Recorder and look for the jdk.VirtualThreadPinned event.
+
+Watch out:
+
+On Java 21, check your libraries for synchronized around I O. Old JDBC drivers and HTTP clients had it. The cleanest fix is upgrading to Java 25.
+
+Don't pool virtual threads. They are cheap to create. Pooling them brings back the limit and the waiting without the benefit. Limit with a semaphore instead.
+
+CPU-heavy work gains nothing. Virtual threads help with waiting. Number crunching is still limited by cores.
+
+Be careful with big ThreadLocal caches. One per thread was fine for 200 threads. One per virtual thread can mean 100,000 copies.
+
+# When to still use CompletableFuture
+
+Virtual threads don't make futures wrong. They make futures unnecessary for the most common case: "call a few things, wait for them, combine". Keep futures where they fit:
+
+The table suggests a choice per situation: virtual threads for blocking calls on Java 21 or later, keep a library's own futures, stay reactive in a reactive app, a core-sized pool for CPU-heavy work, and CompletableFuture with your own executor on Java 17 or older.
+
+Why it's fast: It is the same reason as in Chapter 3: most of a request is waiting, not working. Futures got speed by not tying up a thread while waiting. Virtual threads get the same speed by making the tied-up thread nearly free.
+
+You still get "latency = slowest call" by forking calls. You get more requests in flight, because the limit is no longer 200 threads but your memory and your downstreams. And you get it with code a new teammate can read top to bottom.
+
+Recap:
+
+1. Virtual threads unmount while they wait, so plain blocking code scales. Turn them on with spring.threads.virtual.enabled=true.
+
+2. No pool means no free limit: cap each downstream with a Semaphore or @ConcurrencyLimit.
+
+3. Structured concurrency is preview until Java 28. synchronized pinning is fixed from Java 24, so prefer Java 25.
