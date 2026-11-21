@@ -1,0 +1,157 @@
+/* Figures, callouts and book extras for the book-series posts (Threads, Futures and Queues;
+   Marketing for the CEO). Class names come from the original visual books; colours map onto
+   the site tokens in global.css. No purple: the books' "queue" colour is teal here. */
+
+/* ---------- meaning colours ---------- */
+:root {
+  --m-thread: var(--c-faith);  /* blue: a thread, a person, "the actor" */
+  --m-work: var(--c-tech);     /* green: running, good */
+  --m-wait: #a9690a;           /* amber: waiting, asleep */
+  --m-queue: var(--link);      /* teal: queued, in a queue */
+  --m-bad: var(--c-bad);       /* red: failure, overload */
+  --m-on: #ffffff;             /* text on a solid meaning colour */
+}
+:root[data-theme="dark"] { --m-wait: #eab35a; --m-on: #16181c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --m-wait: #eab35a; --m-on: #16181c; } }
+:root {
+  --m-thread-soft: color-mix(in srgb, var(--m-thread) 16%, var(--svg-surface));
+  --m-work-soft: color-mix(in srgb, var(--m-work) 16%, var(--svg-surface));
+  --m-wait-soft: color-mix(in srgb, var(--m-wait) 20%, var(--svg-surface));
+  --m-queue-soft: color-mix(in srgb, var(--m-queue) 16%, var(--svg-surface));
+  --m-bad-soft: color-mix(in srgb, var(--m-bad) 15%, var(--svg-surface));
+}
+
+/* ---------- prose extras ---------- */
+.prose h3 { font-family: var(--serif); font-size: 1.25rem; line-height: 1.25; margin: 1.6em 0 .45em; }
+.prose dfn { font-style: normal; font-weight: 700; background: linear-gradient(transparent 62%, var(--m-wait-soft) 0); }
+.prose .formula { text-align: center; font-family: var(--sans); font-weight: 700; font-size: 1.05rem; margin: 1.2em 0; }
+.prose :not(pre) > code { font-family: var(--mono); font-size: .86em; background: var(--bg-2); border-radius: 5px; padding: .08em .32em; overflow-wrap: anywhere; }
+
+/* ---------- callouts ---------- */
+.callout { --cc: var(--muted); margin: 1.8em 0; padding: 18px 22px 6px; border-radius: 12px; background: color-mix(in srgb, var(--cc) 7%, var(--bg)); }
+.callout-title { font-family: var(--sans); font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--cc); margin: 0 0 .5em; }
+.callout > :last-child { margin-bottom: .9em; }
+.callout.analogy { --cc: var(--link); }
+.callout.why { --cc: var(--c-tech); }
+.callout.watch { --cc: var(--c-bad); }
+.callout.note { --cc: var(--m-thread); }
+.callout.ask { --cc: var(--accent); }
+.callout.recap { --cc: var(--accent); background: transparent; border: 1px solid var(--rule); }
+.callout.recap ol { padding-left: 1.3em; margin: 0 0 .9em; }
+@media (max-width: 600px) { .callout { padding: 16px 18px 4px; } }
+
+/* ---------- code ---------- */
+.prose pre.astro-code { margin: 1.4em 0; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--rule); overflow-x: auto;
+  font-family: var(--mono); font-size: .8rem; line-height: 1.6; tab-size: 4; -webkit-overflow-scrolling: touch; }
+@media (min-width: 700px) { .prose pre.astro-code { font-size: .84rem; } }
+/* Code colours (Shiki css-variables theme, set in astro.config.mjs). The books' palette, minus purple. */
+:root {
+  --shiki-foreground: var(--text); --shiki-background: var(--bg-2);
+  --shiki-token-comment: #7d776b; --shiki-token-keyword: #0b6b6b; --shiki-token-string: #3f7d2e;
+  --shiki-token-string-expression: #3f7d2e; --shiki-token-constant: #9a5b00; --shiki-token-function: #2858c7;
+  --shiki-token-parameter: var(--text); --shiki-token-punctuation: var(--muted); --shiki-token-link: var(--link);
+}
+:root[data-theme="dark"] {
+  --shiki-token-comment: #8f96a0; --shiki-token-keyword: #5cc8c0; --shiki-token-string: #9fd27a;
+  --shiki-token-string-expression: #9fd27a; --shiki-token-constant: #e3a66e; --shiki-token-function: #74b3f5;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --shiki-token-comment: #8f96a0; --shiki-token-keyword: #5cc8c0; --shiki-token-string: #9fd27a;
+    --shiki-token-string-expression: #9fd27a; --shiki-token-constant: #e3a66e; --shiki-token-function: #74b3f5;
+  }
+}
+.prose .astro-code .token-comment, .prose .astro-code [style*="--shiki-token-comment"] { font-style: italic; }
+.prose .code-title { font-family: var(--sans); font-size: .76rem; font-weight: 600; color: var(--muted); margin: 1.4em 0 0;
+  padding: 7px 14px 6px; border: 1px solid var(--rule); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--bg-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prose .code-title + pre.astro-code { margin-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+.prose pre.astro-code:has(+ .code-notes) { margin-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.prose .code-notes { font-size: .98rem; margin: 0 0 1.6em; padding: 12px 18px 8px 2.6em; background: var(--bg-2);
+  border-radius: 0 0 10px 10px; border: 1px solid var(--rule); border-top: 0; }
+.prose .code-notes li::marker { font-family: var(--mono); font-weight: 700; color: var(--accent); }
+.prose .code-notes li { padding-left: .2em; margin: .5em 0; }
+
+/* ---------- compare, tables, lists ---------- */
+.prose .compare { display: grid; gap: 14px; margin: 1.4em 0; }
+.prose .compare > div { min-width: 0; }
+.prose .compare pre.astro-code { margin: .4em 0 0; }
+@media (min-width: 1100px) { .prose .compare { grid-template-columns: 1fr 1fr; } .prose .compare pre.astro-code { font-size: .74rem; } }
+.prose .compare-label { font-family: var(--sans); font-size: .82rem; font-weight: 700; margin: 0; color: var(--muted); }
+.prose .compare-label.good { color: var(--m-work); }
+.prose .compare-label.bad { color: var(--m-bad); }
+
+.prose .table-wrap { overflow-x: auto; margin: 1.6em 0; border: 1px solid var(--rule); border-radius: 10px; -webkit-overflow-scrolling: touch; }
+.prose table { border-collapse: collapse; width: 100%; font-family: var(--sans); font-size: .9rem; line-height: 1.45; }
+.prose th, .prose td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--rule); }
+.prose th { background: var(--bg-2); font-weight: 700; white-space: nowrap; }
+.prose tr:last-child td { border-bottom: 0; }
+.prose td code { white-space: nowrap; }
+
+.prose .steps { counter-reset: s; list-style: none; padding: 0; }
+.prose .steps > li { counter-increment: s; position: relative; padding-left: 2.6em; margin: 1em 0; }
+.prose .steps > li::before { content: counter(s); position: absolute; left: 0; top: .3em; width: 1.7em; height: 1.7em; border-radius: 50%;
+  display: grid; place-items: center; font-family: var(--sans); font-size: .85rem; font-weight: 750; background: var(--accent); color: var(--on-accent); }
+.prose .glossary dt { font-family: var(--sans); font-weight: 700; margin-top: 1em; }
+.prose .glossary dd { margin: .15em 0 0; }
+
+/* ---------- figures ---------- */
+.fig { margin: 2em 0; }
+.fig > svg { display: block; width: 100%; max-width: 640px; height: auto; margin: 0 auto; background: var(--svg-bg); border-radius: 14px; }
+.fig figcaption { font-family: var(--sans); font-size: .86rem; color: var(--muted); line-height: 1.5; margin: .8em auto 0; max-width: 640px; }
+.fig figcaption b { color: var(--text); }
+.fig svg text { fill: var(--text); font-family: var(--sans); font-size: 13px; }
+.fig svg .t-muted { fill: var(--muted); }
+.fig svg .t-small { font-size: 11px; }
+.fig svg .t-big { font-size: 16px; font-weight: 700; }
+.fig svg .t-bold { font-weight: 700; }
+.fig svg .t-mono { font-family: var(--mono); font-size: 12px; }
+.fig svg .t-mid { text-anchor: middle; }
+.fig svg .t-end { text-anchor: end; }
+.fig svg .t-on { fill: var(--m-on); font-weight: 650; }
+.fig svg .box { fill: var(--svg-surface); stroke: var(--svg-line); stroke-width: 1.5; }
+.fig svg .line { fill: none; stroke: var(--svg-line); stroke-width: 1.5; }
+.fig svg .line-soft { fill: none; stroke: var(--svg-line); stroke-width: 1; stroke-dasharray: 3 4; opacity: .6; }
+.fig svg .ah { fill: var(--svg-line); stroke: none; }
+.fig svg .hatch { stroke: none; }
+.fig svg .f-thread { fill: var(--m-thread); } .fig svg .s-thread { fill: var(--m-thread-soft); stroke: var(--m-thread); stroke-width: 1.5; } .fig svg .k-thread { fill: none; stroke: var(--m-thread); stroke-width: 2; } .fig svg text.c-thread { fill: var(--m-thread); }
+.fig svg .f-work { fill: var(--m-work); } .fig svg .s-work { fill: var(--m-work-soft); stroke: var(--m-work); stroke-width: 1.5; } .fig svg .k-work { fill: none; stroke: var(--m-work); stroke-width: 2; } .fig svg text.c-work { fill: var(--m-work); }
+.fig svg .f-wait { fill: var(--m-wait); } .fig svg .s-wait { fill: var(--m-wait-soft); stroke: var(--m-wait); stroke-width: 1.5; } .fig svg .k-wait { fill: none; stroke: var(--m-wait); stroke-width: 2; } .fig svg text.c-wait { fill: var(--m-wait); }
+.fig svg .f-queue { fill: var(--m-queue); } .fig svg .s-queue { fill: var(--m-queue-soft); stroke: var(--m-queue); stroke-width: 1.5; } .fig svg .k-queue { fill: none; stroke: var(--m-queue); stroke-width: 2; } .fig svg text.c-queue { fill: var(--m-queue); }
+.fig svg .f-bad { fill: var(--m-bad); } .fig svg .s-bad { fill: var(--m-bad-soft); stroke: var(--m-bad); stroke-width: 1.5; } .fig svg .k-bad { fill: none; stroke: var(--m-bad); stroke-width: 2; } .fig svg text.c-bad { fill: var(--m-bad); }
+
+/* ---------- steppers (Stepper.astro adds the controls) ---------- */
+.stepper > svg { cursor: pointer; }
+.stepper [data-step], .stepper [data-only] { transition: opacity .35s ease; }
+.stepper .is-off { opacity: 0; pointer-events: none; }
+.grow-x, .grow-y { transform-box: fill-box; transition: transform .8s cubic-bezier(.3,.7,.3,1); }
+.grow-x { transform-origin: left center; }
+.grow-y { transform-origin: center bottom; }
+.is-off .grow-x, .grow-x.is-off { transform: scaleX(0); }
+.is-off .grow-y, .grow-y.is-off { transform: scaleY(0); }
+.blink-in { transform-box: fill-box; transform-origin: center; transition: transform .35s cubic-bezier(.3,1.6,.5,1), opacity .25s; }
+.is-off .blink-in, .blink-in.is-off { transform: scale(.4); }
+@keyframes fig-pulse { 50% { opacity: .45; } }
+.fig .pulse { animation: fig-pulse 1.4s ease-in-out infinite; }
+
+.step-controls { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 10px auto 0; max-width: 640px; font-family: var(--sans); }
+.step-controls button { appearance: none; font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; border: 1px solid var(--rule);
+  background: var(--surface); color: var(--text); min-height: 44px; padding: 0 16px; border-radius: 999px; }
+.step-controls button:hover:not(:disabled) { border-color: var(--svg-line); }
+.step-controls button:disabled { opacity: .4; cursor: default; }
+.step-controls button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.step-controls .count { min-width: 3.6em; text-align: center; color: var(--muted); font-size: .88rem; font-variant-numeric: tabular-nums; }
+.step-notes { list-style: none; padding: 12px 16px; margin: 10px auto 0; max-width: 640px; background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 10px; font-family: var(--sans); font-size: .95rem; line-height: 1.5; counter-reset: n; }
+.step-notes li { margin: .3em 0; counter-increment: n; }
+.step-notes li::before { content: counter(n) "."; font-weight: 750; color: var(--accent); margin-right: .5em; font-size: .85em; }
+.stepper[data-ready] .step-notes { min-height: 4.4em; }
+.stepper[data-ready] .step-notes li:not(.current) { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fig *, .fig .pulse { transition: none !important; animation: none !important; }
+}
+@media print {
+  .step-controls { display: none !important; }
+  .stepper[data-ready] .step-notes li:not(.current) { display: list-item; }
+}

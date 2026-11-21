@@ -1,0 +1,101 @@
+One request, one thread. Part 1 of 8 of Threads, Futures and Queues.
+
+Before futures and pools make sense, you need one picture in your head: a thread is a worker, and in a normal Spring Boot service every request gets its own worker. This chapter builds that picture, and shows why the number of workers is something you have to watch.
+
+# What a thread is
+
+Your Java code is a list of instructions. A thread is one worker walking through those instructions, one line at a time.
+
+Each thread has its own bookmark (which line it is on) and its own small notepad for local variables and method calls. That notepad is called the stack. All threads share the same big storage room, the heap, where your objects live.
+
+A Java program can have many threads at once. That is how one JVM serves hundreds of users at the same time: hundreds of workers, each walking through the same code with different data.
+
+In the kitchen: Think of a restaurant kitchen. Each cook is a thread. Every cook follows the same recipe book (your code), but each one is working on a different order ticket (a request), and keeps their own place in the recipe.
+
+We will use this kitchen all through the book.
+
+# Cores run threads, a few at a time
+
+The CPU has a small number of cores. A core can run one thread at a time. A laptop might have 8 or more cores; a service container often gets 2 to 8.
+
+So how can 200 threads run on 4 cores? Two reasons.
+
+1. The operating system takes turns. It runs a thread for a short slice of time, then swaps in another. This swap is a context switch.
+
+2. Most threads in a web service are not running at all. They are asleep, waiting for the database or another service to answer. A sleeping thread does not need a core.
+
+Step through the picture below.
+
+Figure: Four CPU cores. Four threads run on them, more threads wait for a turn, and many more are asleep waiting on I O.
+
+# One request, one thread
+
+A normal Spring Boot web app (Spring MVC) runs inside an embedded Tomcat server. Tomcat keeps a group of ready threads, a thread pool. Their names look like http-nio-8080-exec-1, exec-2, and so on.
+
+When a request arrives, Tomcat hands it to one free thread. That thread runs your whole call stack: filter, controller, service, repository. It stays with that request until the response is written. Then it goes back to the pool for the next request.
+
+This is called thread-per-request. It is why plain Spring code is easy to read: everything for one request happens top to bottom, on one thread.
+
+The code here is a small Spring controller that logs the name of the thread handling each request, then waits on the database for the order.
+
+The log output shows two requests, each handled by a different Tomcat thread, exec 3 and exec 7.
+
+Two requests, two different threads. Notice that Spring's default log pattern shows the thread name in brackets (shortened). That bracket is your first clue when reading logs from concurrent code.
+
+Figure: Timeline of one request: the client sends a request, a Tomcat thread runs the code, waits for the database, then replies and returns to the pool.
+
+# Tomcat's pool has a size
+
+Tomcat does not create a new thread for every request. It reuses a fixed set. By default the pool grows up to 200 threads. These are the settings that matter, with their Spring Boot defaults:
+
+The settings here cap Tomcat at 200 request threads, keep 10 spare, hold up to 8,192 connections, and let 100 more wait in the operating system queue.
+
+The key number is threads.max. With 200 threads, at most 200 requests can be in progress at once. Request number 201 is accepted on a connection, but it waits until one of the 200 threads is free.
+
+So a pool is two things at once: a set of workers, and a limit. You will see this idea again and again in this book. Chapter 2 is all about it.
+
+Figure: A grid of 200 squares, one per Tomcat thread: 8 working, 150 waiting on I O, 42 free.
+
+# Why the number of threads matters
+
+If threads are mostly asleep, why not just set threads.max to 5,000? Because every thread has a cost, even a sleeping one.
+
+# Memory
+
+Each regular Java thread is a real operating system thread. Each one gets its own stack. On 64-bit Linux the JVM reserves up to 1 MB per stack by default (the -Xss setting). Only the pages actually used are backed by RAM, so real use is usually smaller, but it adds up: thousands of threads can mean gigabytes of reserved memory plus kernel bookkeeping.
+
+# Context switching
+
+When many threads are ready to run at once, the OS spends more time swapping them on and off the cores. Each swap is cheap (microseconds), but at thousands of swaps per second per core it shows up as wasted CPU, and the CPU caches keep going cold.
+
+# The next bottleneck
+
+More threads also means more requests hitting the next limit at once. A very common one: the database connection pool. HikariCP, Spring Boot's default, allows 10 connections unless you change spring.datasource.hikari.maximum-pool-size. 200 Tomcat threads sharing 10 connections means up to 190 threads just waiting for a connection.
+
+Why it matters: Thread count is your service's concurrency limit: how many things it can have in progress at once. Too few threads and requests queue up even though the CPU is idle. Too many and you burn memory and CPU on bookkeeping, and you overload whatever is downstream. Your team watches thread count because it tells you, at a glance, how close the service is to that limit.
+
+Watch out: Raising server.tomcat.threads.max rarely fixes a slow service. If threads are all stuck waiting on a slow database, more threads just means more waiting, and a bigger pile-up when the database recovers. First find what they are waiting on (a thread dump tells you, below).
+
+# Seeing your threads
+
+You can look at every thread in a running JVM. Three ways, from quickest to most detailed:
+
+Metric: Spring Boot Actuator with Micrometer publishes jvm.threads.live (all threads), jvm.threads.peak and jvm.threads.states (how many are runnable, waiting, blocked). Chapter 7 builds a dashboard from these.
+
+Endpoint: GET or actuator or threaddump, if you have exposed it.
+
+Command line: jcmd <pid> Thread.print prints a thread dump.
+
+A thread dump is a list of every thread with its stack. Here is one Tomcat thread, waiting on Postgres:
+
+The thread dump shows one request thread, exec 3, deep inside a Postgres socket read, waiting for the database to answer the order lookup.
+
+Read it bottom-up: controller called service, service called repository, repository is reading from the database socket. Odd but true: a thread blocked on a socket read often shows as RUNNABLE, not WAITING, because it is inside native code. Look at the top frames to see what it is really doing.
+
+Recap:
+
+1. A thread is a worker walking through your code. In Spring MVC each request gets one Tomcat thread, top to bottom.
+
+2. Tomcat's pool (200 threads by default) is also a limit: at most that many requests in progress at once.
+
+3. Threads cost memory and context switches even when asleep, so thread count is a number to watch, not to max out.

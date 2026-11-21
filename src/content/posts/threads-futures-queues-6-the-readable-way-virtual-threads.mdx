@@ -1,0 +1,420 @@
+---
+title: "The readable way: virtual threads"
+date: 2026-11-20
+category: tech
+series:
+  id: threads-futures-queues
+  title: "Threads, Futures and Queues"
+part: 6
+partsTotal: 8
+tags: ["java", "concurrency", "spring-boot", "virtual-threads"]
+readingMinutes: 9
+summary: "You asked whether there is something more readable than CompletableFuture chains. Since Java 21, there is. Virtual threads let you write plain, top-to-bottom blocking code and still handle thousands of waiting calls at once."
+---
+<aside class="callout analogy">
+<p class="callout-title">In the kitchen</p>
+<p>So far, a cook who puts bread in the oven has to stand there until it is done. That is why we needed buzzers and callbacks.</p>
+<p>Now imagine cooks who can step away from the oven. They clip their ticket to the oven door, and a free station picks up someone else's ticket. When the bread is ready, the ticket goes back in line for the next free station.</p>
+<p>The kitchen has only a few real stations, the <dfn>carrier threads</dfn>. But it can have thousands of "cooks on paper", the <dfn>virtual threads</dfn>, because a cook who is waiting takes up no station at all.</p>
+</aside>
+
+## What a virtual thread is
+
+A normal Java thread, now called a <dfn>platform thread</dfn>, is a thin wrapper around an operating system thread. Each one reserves its own stack (on 64-bit Linux the default reservation is about 1 MB) and the OS has to schedule it. That is one reason Tomcat's pool stops at 200 by default.
+
+A **virtual thread** is a thread the JVM manages itself. Its stack lives on the heap and grows only as needed, so a waiting virtual thread costs little memory. You can have hundreds of thousands of them.
+
+Virtual threads run *on top of* a small pool of platform threads called carriers, roughly one per CPU core. The trick is what happens when the code blocks:
+
+<Stepper>
+<figure class="fig stepper" id="fig-6-1">
+<svg viewBox="0 0 400 270" role="img" aria-labelledby="fig-6-1-t">
+<title id="fig-6-1-t">Two carrier threads run virtual threads. When a virtual thread blocks on I/O it is parked, and the carrier runs another one.</title>
+<text x="10" y="22" class="t-bold">2 carriers (real OS threads)</text>
+<text x="10" y="61" class="t-mono t-small">carrier-1</text>
+<text x="10" y="101" class="t-mono t-small">carrier-2</text>
+<rect x="84" y="42" width="306" height="30" rx="6" class="box" />
+<rect x="84" y="82" width="306" height="30" rx="6" class="box" />
+<rect x="10" y="132" width="380" height="84" rx="6" class="box" />
+<text x="20" y="152" class="t-small t-muted">parked: waiting on I/O, holding no carrier</text>
+<g data-only="1" class="is-off">
+<rect x="92" y="46" width="100" height="22" rx="11" class="s-work blink-in" />
+<text x="142" y="61" class="t-mono t-small t-mid">virtual-1</text>
+<rect x="92" y="86" width="100" height="22" rx="11" class="s-work blink-in" />
+<text x="142" y="101" class="t-mono t-small t-mid">virtual-2</text>
+</g>
+<g data-only="2" class="is-off">
+<rect x="92" y="46" width="100" height="22" rx="11" class="s-work blink-in" />
+<text x="142" y="61" class="t-mono t-small t-mid">virtual-3</text>
+<rect x="92" y="86" width="100" height="22" rx="11" class="s-work" />
+<text x="142" y="101" class="t-mono t-small t-mid">virtual-2</text>
+<rect x="20" y="166" width="150" height="22" rx="11" class="s-wait blink-in pulse" />
+<text x="95" y="181" class="t-mono t-small t-mid">virtual-1 · HTTP</text>
+</g>
+<g data-only="3" class="is-off">
+<rect x="92" y="46" width="100" height="22" rx="11" class="s-work" />
+<text x="142" y="61" class="t-mono t-small t-mid">virtual-3</text>
+<rect x="92" y="86" width="100" height="22" rx="11" class="s-work blink-in" />
+<text x="142" y="101" class="t-mono t-small t-mid">virtual-4</text>
+<rect x="20" y="166" width="150" height="22" rx="11" class="s-wait pulse" />
+<text x="95" y="181" class="t-mono t-small t-mid">virtual-1 · HTTP</text>
+<rect x="180" y="166" width="150" height="22" rx="11" class="s-wait blink-in pulse" />
+<text x="255" y="181" class="t-mono t-small t-mid">virtual-2 · DB</text>
+</g>
+<g data-only="4">
+<rect x="92" y="46" width="100" height="22" rx="11" class="s-work blink-in" />
+<text x="142" y="61" class="t-mono t-small t-mid">virtual-1</text>
+<text x="204" y="61" class="t-small c-work">resumed</text>
+<rect x="92" y="86" width="100" height="22" rx="11" class="s-work" />
+<text x="142" y="101" class="t-mono t-small t-mid">virtual-4</text>
+<rect x="180" y="166" width="150" height="22" rx="11" class="s-wait pulse" />
+<text x="255" y="181" class="t-mono t-small t-mid">virtual-2 · DB</text>
+<text x="20" y="205" class="t-small c-work">virtual-3 finished</text>
+</g>
+<text x="200" y="250" class="t-bold t-mid">A waiting thread never holds a carrier</text>
+</svg>
+<ol class="step-notes">
+<li>Two carriers, two virtual threads running on them. So far it looks like a normal pool.</li>
+<li><code>virtual-1</code> makes an HTTP call. Instead of blocking the carrier, the JVM <em>unmounts</em> it and parks it. <code>carrier-1</code> immediately picks up <code>virtual-3</code>.</li>
+<li><code>virtual-2</code> waits on the database and is parked too. <code>carrier-2</code> runs <code>virtual-4</code>. Two threads are waiting, and no carrier is idle.</li>
+<li>The HTTP reply arrives. <code>virtual-1</code> goes back in line and continues on the next free carrier, right after the line where it stopped.</li>
+</ol>
+<figcaption><b>Figure 6.1</b> Mounting and unmounting. Your code just sees a blocking call that returned.</figcaption>
+</figure>
+</Stepper>
+
+From your code's point of view, nothing special happened. `restClient.get()…body(Profile.class)` blocked and then returned a value. The JVM did the juggling that `CompletableFuture` made you do by hand.
+
+## Turn it on in Spring Boot
+
+On Java 21 or later with Spring Boot 3.2 or later, it is one property:
+
+<p class="code-title">application.properties</p>
+
+```properties
+spring.threads.virtual.enabled=true
+```
+
+That one switch changes several things:
+
+- **Tomcat** (and Jetty) handle each request on a new virtual thread instead of the 200-thread pool.
+- The **`@Async` executor** becomes a `SimpleAsyncTaskExecutor` that starts a virtual thread per task.
+- The **task scheduler** uses virtual threads too.
+- **Kafka and RabbitMQ listener containers** get a virtual-thread executor. (How many consumers run is still set by the container's concurrency. More in [Chapter 7](../threads-futures-queues-7-queue-consumers-at-scale/).)
+
+Your controller code doesn't change at all. This is ordinary blocking code, and on virtual threads it scales:
+
+<p class="code-title">ProfileController.java</p>
+
+```java
+@RestController
+class ProfileController {
+
+    private final RestClient profiles;
+
+    ProfileController(RestClient profiles) {
+        this.profiles = profiles;
+    }
+
+    @GetMapping("/users/{id}/profile")
+    Profile profile(@PathVariable long id) {
+        return profiles.get()
+            .uri("/profiles/{id}", id)
+            .retrieve()
+            .body(Profile.class);   // blocks; the carrier does not
+    }
+}
+```
+
+## Parallel calls, written plainly
+
+Virtual threads don't make calls parallel by themselves. One request still runs top to bottom. To call three services at the same time, start three virtual threads and wait for all of them.
+
+Here is the three-call home page from [Chapter 3](../threads-futures-queues-3-why-its-fast/#the-slowest-call-not-the-sum) again, as a `DashboardService`, written both ways. Both make three calls in parallel, so both take as long as the slowest call.
+
+<div class="compare">
+<div>
+<p class="compare-label">With CompletableFuture</p>
+
+<p class="code-title">DashboardService.java</p>
+
+```java
+CompletableFuture<Dashboard> load(long id) {
+  var profile = CompletableFuture.supplyAsync(
+      () -> profileClient.get(id), ioPool);
+  var orders = CompletableFuture.supplyAsync(
+      () -> orderClient.recent(id), ioPool);
+  var recs = CompletableFuture.supplyAsync(
+      () -> recClient.forUser(id), ioPool)
+    .completeOnTimeout(List.of(),
+        500, MILLISECONDS);
+
+  return CompletableFuture
+    .allOf(profile, orders, recs)
+    .thenApply(v -> new Dashboard(
+        profile.join(),
+        orders.join(),
+        recs.join()));
+}
+```
+
+</div>
+<div>
+<p class="compare-label good">With virtual threads</p>
+
+<p class="code-title">DashboardService.java</p>
+
+```java
+Dashboard load(long id) throws Exception {
+  try (var exec = // (1)
+      Executors.newVirtualThreadPerTaskExecutor()) {
+    var profile = exec.submit( // (2)
+        () -> profileClient.get(id));
+    var orders = exec.submit(
+        () -> orderClient.recent(id));
+    var recs = exec.submit(
+        () -> recClient.forUser(id));
+
+    return new Dashboard(
+        profile.get(), // (3)
+        orders.get(),
+        recsOrEmpty(recs)); // (4)
+  } // (5)
+}
+
+List<Rec> recsOrEmpty(Future<List<Rec>> f)
+    throws Exception {
+  try {
+    return f.get(500, MILLISECONDS);
+  } catch (TimeoutException e) {
+    f.cancel(true); // interrupts it
+    return List.of();
+  }
+}
+```
+
+</div>
+</div>
+
+<ol class="code-notes">
+<li>An executor that starts a brand-new virtual thread for every task. No pool to size. It is <code>AutoCloseable</code>, so it lives in a <code>try</code> block.</li>
+<li><code>submit</code> starts the call right away and returns a plain <code>Future</code>.</li>
+<li><code>get()</code> blocks until the profile is ready. Blocking is fine here, because the request itself runs on a virtual thread.</li>
+<li>A timeout reads like a normal <code>try</code>/<code>catch</code>. And here <code>cancel(true)</code> really does interrupt the call, which a <code>CompletableFuture</code> can't do.</li>
+<li>Leaving the <code>try</code> block waits for every task to finish. No thread is left running after the method returns.</li>
+</ol>
+
+The right-hand version has no `thenApply`, no `allOf`, no hidden thread hops. Exceptions come out of `get()` as a normal `ExecutionException` that you can catch. And a stack trace shows the real call path.
+
+## Cap concurrency with a Semaphore
+
+Here is the catch. A thread pool used to limit you for free: 32 threads meant at most 32 calls at once. With virtual threads there is no pool, so there is no limit.
+
+Your *downstream* systems still have limits. HikariCP's database pool defaults to 10 connections. A partner API might allow 20 calls at a time. Ten thousand virtual threads all calling it at once is an outage.
+
+So you add the limit back, on purpose, right where it belongs. A <dfn>Semaphore</dfn> is a counter of permits. `acquire()` takes one, waiting if none is left. `release()` gives it back.
+
+<figure class="fig" id="fig-6-2">
+<svg viewBox="0 0 400 230" role="img" aria-labelledby="fig-6-2-t">
+<title id="fig-6-2-t">Hundreds of virtual threads wait at a semaphore with 20 permits, so only 20 calls reach the partner API at once.</title>
+<defs>
+<marker id="ah-6-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" class="ah" />
+</marker>
+</defs>
+<text x="10" y="22" class="t-bold">500 virtual threads</text>
+<g>
+<circle cx="22" cy="50" r="7" class="s-wait" />
+<circle cx="42" cy="50" r="7" class="s-wait" />
+<circle cx="62" cy="50" r="7" class="s-wait" />
+<circle cx="82" cy="50" r="7" class="s-wait" />
+<circle cx="102" cy="50" r="7" class="s-wait" />
+<circle cx="22" cy="70" r="7" class="s-wait" />
+<circle cx="42" cy="70" r="7" class="s-wait" />
+<circle cx="62" cy="70" r="7" class="s-wait" />
+<circle cx="82" cy="70" r="7" class="s-wait" />
+<circle cx="102" cy="70" r="7" class="s-wait" />
+<circle cx="22" cy="90" r="7" class="s-wait" />
+<circle cx="42" cy="90" r="7" class="s-wait" />
+<circle cx="62" cy="90" r="7" class="s-wait" />
+<circle cx="82" cy="90" r="7" class="s-wait" />
+<circle cx="102" cy="90" r="7" class="s-wait" />
+<circle cx="22" cy="110" r="7" class="s-wait" />
+<circle cx="42" cy="110" r="7" class="s-wait" />
+<circle cx="62" cy="110" r="7" class="s-wait" />
+<circle cx="82" cy="110" r="7" class="s-wait" />
+<circle cx="102" cy="110" r="7" class="s-wait" />
+<circle cx="22" cy="130" r="7" class="s-wait" />
+<circle cx="42" cy="130" r="7" class="s-wait" />
+<circle cx="62" cy="130" r="7" class="s-wait" />
+<circle cx="82" cy="130" r="7" class="s-wait" />
+<circle cx="102" cy="130" r="7" class="s-wait" />
+</g>
+<text x="10" y="162" class="t-small c-wait">waiting in acquire():</text>
+<text x="10" y="178" class="t-small c-wait">cheap, no carrier held</text>
+<rect x="140" y="36" width="96" height="110" rx="6" class="s-queue" />
+<text x="188" y="58" class="t-bold t-mid">Semaphore</text>
+<text x="188" y="76" class="t-small t-mid">20 permits</text>
+<g>
+<rect x="152" y="88" width="10" height="16" rx="2" class="f-queue" />
+<rect x="166" y="88" width="10" height="16" rx="2" class="f-queue" />
+<rect x="180" y="88" width="10" height="16" rx="2" class="f-queue" />
+<rect x="194" y="88" width="10" height="16" rx="2" class="f-queue" />
+<rect x="208" y="88" width="10" height="16" rx="2" class="f-queue" />
+<rect x="152" y="110" width="10" height="16" rx="2" class="f-queue" />
+<rect x="166" y="110" width="10" height="16" rx="2" class="f-queue" />
+<rect x="180" y="110" width="10" height="16" rx="2" class="f-queue" />
+<rect x="194" y="110" width="10" height="16" rx="2" class="f-queue" />
+<rect x="208" y="110" width="10" height="16" rx="2" class="f-queue" />
+</g>
+<text x="188" y="140" class="t-small t-mid t-muted">all in use</text>
+<path d="M114 90 H136" class="line" marker-end="url(#ah-6-2)" />
+<path d="M240 90 H270" class="line" marker-end="url(#ah-6-2)" />
+<rect x="274" y="36" width="116" height="110" rx="6" class="box" />
+<text x="332" y="58" class="t-bold t-mid">Partner API</text>
+<rect x="280" y="70" width="104" height="22" rx="6" class="s-work" />
+<text x="332" y="85" class="t-small t-mid">20 calls at once</text>
+<text x="332" y="112" class="t-small t-mid">its limit is 20</text>
+<text x="332" y="130" class="t-small t-mid c-work">stays healthy</text>
+<text x="200" y="214" class="t-bold t-mid">The limit lives next to the resource</text>
+</svg>
+<figcaption><b>Figure 6.2</b> With virtual threads the limit moves from "how many threads" to "how many permits". Waiting for a permit is cheap.</figcaption>
+</figure>
+
+<p class="code-title">PartnerClient.java</p>
+
+```java
+@Component
+class PartnerClient {
+
+    private final Semaphore permits = // (1)
+        new Semaphore(20);
+    private final RestClient http;
+
+    PartnerClient(RestClient http) {
+        this.http = http;
+    }
+
+    Quote quote(String sku) throws InterruptedException {
+        permits.acquire(); // (2)
+        try {
+            return http.get().uri("/quotes/{sku}", sku)
+                .retrieve().body(Quote.class);
+        } finally {
+            permits.release(); // (3)
+        }
+    }
+}
+```
+
+<ol class="code-notes">
+<li>At most 20 calls at once, across every thread in this app instance.</li>
+<li>The 21st caller waits here. On a virtual thread, that wait is cheap.</li>
+<li>Always release in <code>finally</code>, or a failed call leaks a permit forever.</li>
+</ol>
+
+Two Spring shortcuts do the same job:
+
+- Spring Framework 7 (Spring Boot 4) adds `@ConcurrencyLimit(20)` on a method. It only takes effect if a `@Configuration` class has `@EnableResilientMethods`.
+- For `@Async` on virtual threads, set `spring.task.execution.simple.concurrency-limit`. Otherwise there is no limit at all.
+
+## Structured concurrency (still a preview)
+
+The `newVirtualThreadPerTaskExecutor` version has one weak spot. If the orders call fails, `orders.get()` throws, but the recommendations call keeps running. Closing the executor then waits for it anyway.
+
+<dfn>Structured concurrency</dfn> fixes that. You open a scope, fork subtasks into it, and join. If one subtask fails, the scope cancels the others. When the block ends, every subtask has ended too.
+
+<p class="code-title">DashboardService.java (Java 27, preview)</p>
+
+```java
+// javac --release 27 --enable-preview
+// java --enable-preview
+Dashboard load(long id)
+        throws ExecutionException, InterruptedException {
+    try (var scope = StructuredTaskScope.open()) {
+        var profile = scope.fork(() -> profileClient.get(id));
+        var orders  = scope.fork(() -> orderClient.recent(id));
+        var recs    = scope.fork(() -> recClient.forUser(id));
+
+        scope.join();   // one fails: others are cancelled
+
+        return new Dashboard(
+            profile.get(), orders.get(), recs.get());
+    }
+}
+```
+
+<aside class="callout note">
+<p class="callout-title">Status check (November 2026)</p>
+<ul>
+<li>Structured concurrency is a <strong>preview</strong> API in every released Java so far. Java 21 to 24 had previews, Java 25 the fifth (JEP 505), Java 26 the sixth (JEP 525), Java 27 the seventh (JEP 533).</li>
+<li>The API changed between previews. In Java 27, <code>join()</code> throws <code>ExecutionException</code>. Earlier previews threw <code>StructuredTaskScope.FailedException</code>, and the Java 21 preview used different classes again.</li>
+<li>JEP 543 makes it final in <strong>Java 28</strong>, with no planned API changes from Java 27. Java 28 is due in March 2027 and isn't released yet.</li>
+<li><strong>Scoped values</strong>, a safer replacement for some <code>ThreadLocal</code> uses, are already final as of Java 25 (JEP 506).</li>
+</ul>
+<p>So for production code today, use the executor version, and keep an eye on Java 28.</p>
+</aside>
+
+## Pinning, and its current status
+
+A virtual thread is <dfn>pinned</dfn> when it blocks but *can't* unmount, so it holds its carrier the whole time. With only a few carriers, a few pinned threads can stall everything, exactly like Figure 5.1.
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Java version</th><th>Blocking inside <code>synchronized</code></th></tr>
+</thead>
+<tbody>
+<tr><td>21, 22, 23</td><td>Pins the carrier. Replace with <code>ReentrantLock</code> around blocking I/O.</td></tr>
+<tr><td>24 and later (JEP 491)</td><td>Fixed: the virtual thread unmounts as usual. Java 25 is the first LTS with this fix.</td></tr>
+</tbody>
+</table>
+</div>
+
+Even on Java 24+, a few rare cases still pin. The main one: native code (JNI or the Foreign Function API) that calls back into Java, which then blocks. Blocking inside a class initializer is another. Ordinary Spring code rarely hits these.
+
+To check, record with Java Flight Recorder and look for the `jdk.VirtualThreadPinned` event.
+
+<aside class="callout watch">
+<p class="callout-title">Watch out</p>
+<ul>
+<li><strong>On Java 21, check your libraries</strong> for <code>synchronized</code> around I/O. Old JDBC drivers and HTTP clients had it. The cleanest fix is upgrading to Java 25.</li>
+<li><strong>Don't pool virtual threads.</strong> They are cheap to create. Pooling them brings back the limit and the waiting without the benefit. Limit with a semaphore instead.</li>
+<li><strong>CPU-heavy work gains nothing.</strong> Virtual threads help with <em>waiting</em>. Number crunching is still limited by cores.</li>
+<li><strong>Be careful with big <code>ThreadLocal</code> caches.</strong> One per thread was fine for 200 threads. One per virtual thread can mean 100,000 copies.</li>
+</ul>
+</aside>
+
+## When to still use CompletableFuture
+
+Virtual threads don't make futures wrong. They make futures unnecessary for the most common case: "call a few things, wait for them, combine". Keep futures where they fit:
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Situation</th><th>Good choice</th></tr>
+</thead>
+<tbody>
+<tr><td>Blocking calls (JDBC, <code>RestClient</code>) on Java 21+</td><td>Virtual threads, plain code</td></tr>
+<tr><td>A library already returns a future (<code>KafkaTemplate.send</code>, AWS SDK async clients)</td><td>Keep the future. Chain on it, or <code>join()</code> it on a virtual thread.</td></tr>
+<tr><td>WebFlux / reactive app</td><td>Stay reactive. Don't mix styles in one flow.</td></tr>
+<tr><td>CPU-heavy work (parsing, resizing, crypto)</td><td>A bounded platform-thread pool about the size of your cores</td></tr>
+<tr><td>Java 17 or older</td><td><code>CompletableFuture</code> with your own bounded executor (Chapters 4 and 5)</td></tr>
+</tbody>
+</table>
+</div>
+
+<aside class="callout why">
+<p class="callout-title">Why it's fast</p>
+<p>It is the same reason as in <a href="../threads-futures-queues-3-why-its-fast/">Chapter 3</a>: most of a request is waiting, not working. Futures got speed by not tying up a thread while waiting. Virtual threads get the same speed by making the tied-up thread nearly free.</p>
+<p>You still get "latency = slowest call" by forking calls. You get more requests in flight, because the limit is no longer 200 threads but your memory and your downstreams. And you get it with code a new teammate can read top to bottom.</p>
+</aside>
+
+<aside class="callout recap">
+<p class="callout-title">Recap</p>
+<ol>
+<li>Virtual threads unmount while they wait, so plain blocking code scales. Turn them on with <code>spring.threads.virtual.enabled=true</code>.</li>
+<li>No pool means no free limit: cap each downstream with a <code>Semaphore</code> or <code>@ConcurrencyLimit</code>.</li>
+<li>Structured concurrency is preview until Java 28. <code>synchronized</code> pinning is fixed from Java 24, so prefer Java 25.</li>
+</ol>
+</aside>

@@ -1,0 +1,72 @@
+---
+// Wraps one book figure (<figure class="fig stepper">) and makes it step-through:
+// Back / Next / Play, tap the picture to advance. SVG parts carry data-step="n" (shown from
+// step n on) or data-only="n m" (shown only on those steps); <ol class="step-notes"> holds one
+// note per step. Without JS the figure shows its last step and every note.
+---
+<div class="stepper-host"><slot /></div>
+
+<script>
+  function initStepper(fig: HTMLElement) {
+    if (fig.dataset.ready) return;
+    const svg = fig.querySelector('svg');
+    const notes = fig.querySelector<HTMLOListElement>('.step-notes');
+    const items = notes ? Array.from(notes.querySelectorAll('li')) : [];
+    const total = items.length;
+    if (!svg || !notes || total < 1) return;
+    fig.dataset.ready = '';
+    notes.setAttribute('aria-live', 'polite');
+    const stepEls = Array.from(svg.querySelectorAll<SVGElement>('[data-step]'));
+    const onlyEls = Array.from(svg.querySelectorAll<SVGElement>('[data-only]'));
+    let cur = 1;
+    let timer: number | undefined;
+
+    const ctr = document.createElement('div');
+    ctr.className = 'step-controls';
+    const button = (label: string, cls = '') => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      if (cls) b.className = cls;
+      return b;
+    };
+    const back = button('← Back');
+    const count = document.createElement('span');
+    count.className = 'count';
+    const next = button('Next →', 'primary');
+    const play = button('Play');
+    ctr.append(back, count, next, play);
+    svg.after(ctr);
+
+    const render = () => {
+      fig.dataset.current = String(cur);
+      stepEls.forEach((e) => e.classList.toggle('is-off', Number(e.dataset.step) > cur));
+      onlyEls.forEach((e) => {
+        const on = (e.dataset.only || '').split(/[\s,]+/).map(Number).includes(cur);
+        e.classList.toggle('is-off', !on);
+      });
+      items.forEach((li, i) => li.classList.toggle('current', i + 1 === cur));
+      count.textContent = `${cur} / ${total}`;
+      back.disabled = cur === 1;
+      next.disabled = cur === total;
+      play.textContent = timer ? 'Pause' : cur === total ? 'Replay' : 'Play';
+    };
+    const go = (n: number) => { cur = Math.max(1, Math.min(total, n)); render(); };
+    const stop = () => { if (timer) { clearInterval(timer); timer = undefined; } render(); };
+    back.addEventListener('click', () => { stop(); go(cur - 1); });
+    next.addEventListener('click', () => { stop(); go(cur + 1); });
+    play.addEventListener('click', () => {
+      if (timer) return stop();
+      if (cur === total) go(1);
+      timer = window.setInterval(() => (cur >= total ? stop() : go(cur + 1)), 2200);
+      render();
+    });
+    svg.addEventListener('click', () => { stop(); go(cur >= total ? 1 : cur + 1); });
+    document.addEventListener('astro:before-swap', stop, { once: true });
+    render();
+  }
+
+  const initAll = () => document.querySelectorAll<HTMLElement>('.fig.stepper').forEach(initStepper);
+  initAll();
+  document.addEventListener('astro:page-load', initAll);
+</script>

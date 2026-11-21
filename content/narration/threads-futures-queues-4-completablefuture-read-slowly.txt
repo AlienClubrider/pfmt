@@ -1,0 +1,149 @@
+CompletableFuture, read slowly. Part 4 of 8 of Threads, Futures and Queues.
+
+This is the chapter for the code that confused you at work. We take CompletableFuture apart one method at a time, find out which thread runs each line, and then read a real-looking chain from top to bottom.
+
+# A box that fills in later
+
+A CompletableFuture<T> is a box that will hold a T later. Right now it may be empty. At some point it gets filled with either a value or an error. That is all it is.
+
+You can do two things with the box:
+
+1. Wait for it: join() blocks the current thread until the box is filled.
+
+2. Attach a next step: "when this box is filled, run this function". The method returns a new box for the result of that step.
+
+Attaching steps to boxes, one after another, is what a "chain" is. Each line of a chain is a new box that depends on the box above it.
+
+In the kitchen: At a burger counter you order, pay, and get a buzzer. The buzzer is the future: it is not your food, it is a promise of food. You can stand at the counter staring at it (join()), or leave instructions: "when it buzzes, add fries and bring it to table 6" (thenApply). Meanwhile, the counter is free to serve the next person.
+
+Figure: A chain of three futures. Each box starts empty and fills when the one above it is done. On error, thenApply is skipped and exceptionally provides a fallback.
+
+# Starting work: supplyAsync
+
+Most chains begin with supplyAsync: "run this function on another thread, and give me a box for its result".
+
+The code here starts loading a cart on the I/O pool and gets back a CompletableFuture of Cart straight away.
+
+The call returns immediately with an empty box. A thread from ioPool runs carts.load and fills the box later. runAsync is the same for work that returns nothing.
+
+Note the second argument, ioPool. It is optional, and leaving it out is the most common mistake with this API. More on that in the common pool trap.
+
+A CompletableFuture can also come from a library instead: Spring's @Async methods (Chapter 2), the JDK's HttpClient.sendAsync, or WebClient ... .toFuture(). They all give you the same kind of box.
+
+# The verbs, in plain words
+
+The API has over 50 methods, but you only meet about ten. Each one answers "what should happen when the box above is filled?"
+
+The table lists the main CompletableFuture methods in plain words, from thenApply to change the value, through thenCompose, thenCombine, allOf, the error handlers and orTimeout, to join and get, which block the thread.
+
+Every then... method also has an ...Async twin, like thenApplyAsync. Same job; the difference is which thread runs it. That gets its own section below.
+
+# thenApply versus thenCompose
+
+This pair confuses everyone once. The rule: look at what your function returns.
+
+It returns a plain value (user.name())? Use thenApply.
+
+It returns another future (an async call)? Use thenCompose.
+
+The code here shows thenApply for a function that returns a plain value, thenCompose for one that returns a future, and the wrong verb giving a future inside a future.
+
+Figure: thenApply with an async function gives a future inside a future. thenCompose flattens it into one future of Address.
+
+# Waiting for two, or for many
+
+Two independent things: start both, then merge with thenCombine. This is the "latency = slowest call" trick from Chapter 3.
+
+The code here starts the profile and orders calls in parallel and uses thenCombine to build the account page from both.
+
+A list of things: start one future per item, wait for all with allOf, then read each result. allOf gives you a CompletableFuture<Void>, so the values come from the original futures. Calling join() on them after allOf is done does not wait at all.
+
+The code here starts one price lookup per product, waits for all of them with allOf, and then collects the finished prices.
+
+# When something fails
+
+If a step throws, its box is filled with the error. As Figure 4.1 showed, the error then skips every normal step below until it meets a handler:
+
+The code here turns a pricing error into an "unavailable" quote with exceptionally, records metrics with whenComplete, and shows handle doing the same in one step.
+
+Two details that trip people up:
+
+The error is often wrapped. If a step throws inside a chain, later steps see a CompletionException with your real exception inside as the cause. Check ex.getCause() before deciding what went wrong.
+
+join() versus get(). Both block. join() throws an unchecked CompletionException; get() throws a checked ExecutionException (and InterruptedException). Same cause inside either way.
+
+Watch out: A chain with no exceptionally, handle or join() at the end swallows its errors. Nobody looks inside the box, so the exception is never logged. If you see a chain that is started and then dropped (fire and forget), make sure it ends with a handler that at least logs. Chapter 5 has more of these traps.
+
+# Which thread runs what
+
+This is the part nobody tells you, and it decides whether a chain is safe. The rules:
+
+The table shows which thread runs each step: your pool when you pass one, the common pool when you don't, and for a plain thenApply, whichever thread filled the box before it.
+
+The non-Async steps are the slippery ones: you can't tell from the code which thread runs them. That's fine for quick transforms like Cart::total. It's not fine for anything slow or blocking. If a step does I O, give it an executor: thenApplyAsync(f, ioPool).
+
+Figure: Thread lanes for a request that starts two async calls, combines them, and joins: the combine step runs on the I O thread that finished last.
+
+Freeing the Tomcat thread too: In Figure 4.3, exec-1 still waits during join(). Spring MVC lets a controller return the CompletableFuture itself instead. Then Tomcat's thread is released straight away and the response is written when the box fills. That saves Tomcat threads, at the cost of code that is harder to follow. Chapter 6 shows a simpler way to get the same benefit.
+
+# The common pool trap
+
+Leave out the executor (supplyAsync(f), thenApplyAsync(f)) and the work runs on ForkJoinPool.commonPool(). Three facts about that pool:
+
+1. It is shared by the whole JVM: parallel streams, other libraries, every other future without an executor.
+
+2. It is small: by default, one thread fewer than the number of CPUs. A 4-CPU container gets 3 threads.
+
+3. It was designed for CPU work, not for waiting on HTTP or databases.
+
+So a handful of slow HTTP calls without an executor can block all of its threads, and every other user of the pool stalls behind them.
+
+Figure: The common pool with 3 threads, all stuck on slow HTTP calls, while parallel stream work and other futures queue up behind them.
+
+One more surprise: if the machine has so few CPUs that the common pool would get fewer than two threads, CompletableFuture doesn't use it at all. It starts a brand-new thread for every task instead. On a 1 or 2 CPU container, that is an unbounded number of threads. Your thread count graph will show it.
+
+# Reading a real chain, top to bottom
+
+Here is the kind of code you might meet at work. A checkout page needs the cart's price quote with the customer's loyalty points applied, within 800 milliseconds, or a fallback.
+
+The code here is a checkout summary in seven numbered steps: start the loyalty points call, load the cart, ask pricing for a quote, combine it with the points, turn it into the response, time out after 800 milliseconds, and fall back on any error.
+
+1. Starts now. The loyalty call begins on an ioPool thread the moment summary() is called. It runs in parallel with everything below.
+
+2. Also starts now, on another ioPool thread: load the cart. Steps 1 and 2 are the "fan out".
+
+3. thenCompose: once the cart is loaded, ask pricing for a quote. pricing.quote is itself async (returns a future), so this is thenCompose, not thenApply. Runs on the thread that loaded the cart.
+
+4. thenCombine: wait for the quote and the points from step 1, then apply the points. Runs on whichever of the two finished last.
+
+5. thenApply: a quick, pure transform into the response type. Same thread as step 4.
+
+6. orTimeout: if the whole chain above isn't done within 800 milliseconds, fill the box with a TimeoutException. Note: this does not stop the calls that are still running; it only stops waiting for them.
+
+7. exceptionally: any error above (cart, pricing, loyalty or timeout) lands here. Errors from earlier steps arrive wrapped in a CompletionException; the timeout arrives as a plain TimeoutException. Log it and return a fallback, so the caller always gets a value. On a timeout this runs on the JDK's internal timer thread, which is one more reason to keep handlers short.
+
+Total time: roughly the slower of "cart then quote" and "points", capped at 800 milliseconds. Without futures it would be cart + quote + points, uncapped.
+
+# A reading routine
+
+Here is the routine you just used, as five questions. Chapter 8 keeps it on one page for work.
+
+1. Where does work leave this thread? Look for supplyAsync, runAsync, @Async, and methods that return a future. Above: steps 1 and 2 (and the pricing client's own async call in step 3). Everything started before something is waited on runs at the same time.
+
+2. Who runs it? Name the executor for each start. Above: ioPool every time. No executor means the common pool.
+
+3. Read the chain in plain words. One line, one "and when that's done...". thenCompose = another async call; thenCombine or allOf = waiting for things started earlier.
+
+4. How does it end, and what if it fails? Find the handler and the timeout, and who receives the box (here: the caller). No handler means silent failures; no timeout means a stuck call holds threads forever. Every join() or get() parks a thread: ask which one.
+
+5. What are the limits? The size of ioPool and its queue, the pricing client's connection pool, the database pool. The smallest one decides how many of these can really run at once.
+
+Why it matters: A chain is a recipe for overlapping waits without dedicating a thread to each wait. That is how the 400 milliseconds page from Chapter 3 becomes 200 milliseconds. Once you can name the thread for every line, the scary-looking code turns into a list of "start this, then when it's done, do that".
+
+Recap:
+
+1. A CompletableFuture is a box that fills later with a value or an error; each chained step makes a new box.
+
+2. thenApply for plain values, thenCompose for async calls, thenCombine or allOf to wait for several, exceptionally or handle for errors.
+
+3. Always pass your own executor. Without one you share the small common pool with the whole JVM.

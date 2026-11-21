@@ -1,0 +1,123 @@
+Cheat sheet. Part 8 of 8 of Threads, Futures and Queues.
+
+The whole book on a few screens. Keep this one open next to that confusing class at work: five steps to read it, a translation table, a "which tool when" guide, the numbers worth remembering, and a glossary.
+
+In the kitchen: A new cook walks into a busy kitchen. Before touching anything they ask five things. Where do tickets come in? Who cooks them? What happens to each dish? Where does it go out, and what if it's burnt? How many can we do at once?
+
+Reading async code is the same five questions.
+
+# Read async code in five steps
+
+Figure: Five steps: find where work leaves the thread, name the executor, read the chain, find the end and the failure path, count the limits.
+
+1. Find where work leaves the current thread. Search the class for supplyAsync, runAsync, @Async, .submit(, parallelStream, @KafkaListener, @RabbitListener, @SqsListener. Everything else runs on the caller's thread.
+
+2. Name the executor for each one. Is one passed in? Which bean is it, and how many threads and how big a queue does it have? No executor on supplyAsync means the common pool (cores minus 1 threads). @Async with no name means Spring Boot's applicationTaskExecutor.
+
+3. Read each chain top to bottom, saying each method in plain words with the table below. Note any ...Async stage, because that is another hop to another thread.
+
+4. Find where it ends, and what happens when it fails. Is the future joined, returned to Spring (a controller can return a CompletableFuture), or dropped? Is there an exceptionally or handle, and a timeout? A dropped future with no handler is a silent failure (Chapter 5).
+
+5. Count the limits along the path. Pool sizes, queue capacities, semaphores, listener concurrency, partitions, the DB connection pool. The smallest one is how many can really run at once.
+
+# CompletableFuture in plain words
+
+Each method, what it means out loud, and how you would write the same thing with virtual threads (Chapter 6).
+
+The table translates each CompletableFuture method into plain words and into the plain-code version you would write with virtual threads.
+
+One rule from Chapter 4 worth repeating: a stage without Async runs on whichever thread finished the stage before it, or on the caller if that stage was already done. Don't put slow work there unless you know which thread that is.
+
+Watch out: Three red flags to spot in five seconds:
+
+supplyAsync(...) with one argument doing I O: it's on the common pool.
+
+.join() inside a lambda that runs on a pool: a starvation or deadlock risk.
+
+A future that is never joined, returned or handled: failures disappear.
+
+# Which tool when
+
+Figure: Decision tree. CPU work: bounded pool near core count. Before Java 21: CompletableFuture with own pool. Already a future or reactive: keep it. Downstream limit: virtual threads with a semaphore. Otherwise: virtual threads with plain code.
+
+The table matches common needs to a tool and a chapter: virtual threads or CompletableFuture for parallel calls, semaphores to protect a downstream, listener settings for queues, @Async or a message for fire and forget, and @Scheduled for periodic work.
+
+# Numbers worth remembering
+
+Defaults, from the current docs. Check your own config: teams often override them.
+
+The table lists the defaults: 200 Tomcat threads with 100 waiting connections, a common pool of cores minus one, 8 @Async threads with an unbounded queue, one scheduler thread, Kafka's 500 records and 5 minutes, RabbitMQ's prefetch of 250, SQS's 10 and 10, and a Hikari pool of 10.
+
+Why it matters: Most production incidents with async code aren't clever bugs. They're a default nobody looked at: an unbounded queue, a pool of 10 behind 200 request threads, a single scheduler thread. Knowing these numbers turns "it's slow sometimes" into "the Hikari pool is the bottleneck".
+
+# Glossary
+
+Thread: One line of execution: the code runs step by step on it. A cook.
+
+Platform thread: A Java thread backed by one operating-system thread. Costly, so you keep hundreds, not hundreds of thousands.
+
+Virtual thread: A thread managed by the JVM (Java 21+). Cheap; it gives up its carrier while it waits.
+
+Carrier thread: A platform thread that runs virtual threads, one at a time.
+
+Thread pool or executor: A fixed crew of threads that takes tasks from a queue. ThreadPoolTaskExecutor in Spring.
+
+Task queue: Where tasks wait for a free thread. The ticket rail. Should be bounded.
+
+Common pool: The JVM-wide ForkJoinPool that supplyAsync uses when you pass no executor. Cores minus 1 threads.
+
+Blocking: A call that makes the thread wait until it returns, like a socket read or future.get().
+
+I O wait: Time spent waiting for a network, disk or database, not using the CPU.
+
+CompletableFuture: A ticket for a result that may not exist yet, plus a list of steps to run when it does.
+
+Stage: One step in a CompletableFuture chain (thenApply, thenCompose, ...).
+
+Latency: How long one request takes, start to finish.
+
+Throughput: How many requests (or messages) are finished per second.
+
+Little's law: In flight = rate times time each. 1,000 or s times 0.05 s = 50 at once.
+
+Context switch: The CPU stopping one thread to run another. Cheap once, costly by the million.
+
+Backpressure: Slowing down whoever sends work when you are full, instead of piling it up.
+
+Rejection policy: What a full pool does with a new task: throw, run it on the caller, or drop it.
+
+Starvation: A task that is ready but never gets a thread.
+
+Deadlock: Tasks waiting on each other in a circle, so none can move.
+
+ThreadLocal: A variable with a separate value per thread. Holds the MDC and the security context.
+
+MDC: Mapped Diagnostic Context: the key-values (like trace id) your logger adds to every line.
+
+TaskDecorator: A Spring wrapper around each task, used to copy context to the worker thread.
+
+Semaphore: A counter of permits. Caps how many callers can be inside a section at once.
+
+Pinning: A virtual thread that can't unmount while it waits, so it holds its carrier. Mostly fixed in Java 24+.
+
+Structured concurrency: Forking subtasks inside a scope that waits for, and cancels, all of them. Preview until Java 28.
+
+Listener concurrency: How many messages a queue consumer processes at once.
+
+Prefetch or poll size: How many messages a consumer pulls into memory ahead of processing.
+
+Partition: A Kafka topic's unit of order and parallelism. One consumer per partition per group.
+
+Rebalance: Kafka moving partitions between consumers, for example when one is too slow to poll.
+
+Lag: How far a consumer is behind the newest message. The number to watch.
+
+Thread dump: A snapshot of every thread and the line it is on. jcmd <pid> Thread.print.
+
+Recap:
+
+1. Read async code in five steps: where work leaves, who runs it, the chain in plain words, the end and the failure path, and the limits.
+
+2. Waiting-heavy work on Java 21+: virtual threads plus an explicit limit. CPU work: a small bounded pool. Queue work: listener concurrency.
+
+3. Know the defaults (200, cores minus 1, 8 + unbounded, 500, 250, 10). Most incidents hide in one of them.

@@ -1,0 +1,107 @@
+Pools and queues. Part 2 of 8 of Threads, Futures and Queues.
+
+"We only have so many running at once." That sentence is about pools and queues. This chapter shows how a thread pool decides what to do with each new task, how Spring's @Async and queue listeners use pools, and what happens when everything is full.
+
+# Why reuse threads
+
+Starting a new operating system thread takes time and memory. Doing it for every small task would be wasteful, and nothing would stop you from starting 50,000 of them by accident.
+
+So we keep a thread pool: a fixed group of threads that stay alive and take work one task after another. Tasks that arrive while every thread is busy wait in a task queue.
+
+In the kitchen: The kitchen has a fixed number of cooks on shift (the pool). New order tickets go on the ticket rail (the queue). A cook who finishes a dish grabs the next ticket from the rail. If the rail is full, the host at the front door has to stop seating guests or turn them away.
+
+# How a pool decides: the four rules
+
+Java's standard pool is ThreadPoolExecutor. Spring's ThreadPoolTaskExecutor wraps it. It has three numbers:
+
+core size: threads it keeps around,.
+
+queue capacity: how many tasks may wait,.
+
+max size: the most threads it will ever have.
+
+When a new task arrives, it follows these rules, in this order:
+
+1. Fewer than core threads? Start a new thread for it.
+
+2. Otherwise, is there room in the queue? Put it in the queue.
+
+3. Queue full, fewer than max threads? Start an extra thread.
+
+4. Everything full? Reject the task.
+
+Rule 2 surprises almost everyone. The pool fills the queue before it grows past core size. Step through it with a tiny pool: core 2, queue 3, max 4.
+
+Figure: A pool with core size 2, queue capacity 3 and max size 4 receiving 8 tasks: 2 start on core threads, 3 wait in the queue, 2 start on extra threads, and the 8th is rejected.
+
+# Spring's @Async and its executor
+
+In Spring, a pool is usually a bean of type ThreadPoolTaskExecutor. You give work to it with @Async, or by calling it directly.
+
+If you don't define one, Spring Boot creates one for you, called applicationTaskExecutor. Its threads are named task-1, task-2, .... Its defaults: 8 core threads, and an unbounded queue. Remember rule 2: with an unbounded queue, the queue never fills, so the pool never grows past 8 and never rejects. Tasks just pile up.
+
+For real work, define your own pool with bounded numbers and a clear name:
+
+The code here defines a Spring thread pool for reports: threads named report, 4 core threads growing to 8, a queue of 100, and caller-runs when everything is full.
+
+1. A name prefix. In logs and thread dumps you will see report-1, report-2, so you always know which pool did the work.
+
+2. 4 threads normally, up to 8 under pressure (only once the queue is full, rule 3).
+
+3. A bounded queue: at most 100 tasks wait. This is what makes the limit real.
+
+4. What to do when full. More on this below.
+
+The code here marks a report method with @Async, so it runs on a report thread and hands back a CompletableFuture.
+
+The caller gets a CompletableFuture back straight away, and the work runs on a report-N thread. Chapter 4 explains what you can do with that future.
+
+Version note: Once you define your own Executor bean, Spring Boot's auto-configured applicationTaskExecutor backs off. If you turn on virtual threads (spring.threads.virtual.enabled=true, Chapter 6), the auto-configured executor becomes a SimpleAsyncTaskExecutor that starts a virtual thread per task, and the pool settings no longer apply.
+
+# When the pool is full
+
+Rule 4, rejection, is decided by a rejection policy. The JDK ships four:
+
+The table compares the four rejection policies: abort throws, caller-runs makes the submitting thread do the work, discard silently drops it, and discard-oldest drops the oldest queued task.
+
+CallerRunsPolicy is a simple form of backpressure: pushing back on whoever is sending work, so they slow down instead of piling it up. If a Tomcat thread submits a task and the pool is full, that Tomcat thread does the work itself. While it is busy, it can't submit more. Intake slows to the speed you can actually handle.
+
+Watch out:
+
+Unbounded queue = hidden overload. Nothing is ever rejected, so nothing looks wrong. Meanwhile the queue grows, memory grows, and every task waits longer. The first sign is often timeouts somewhere else.
+
+Max size does nothing with an unbounded queue (rule 3 never triggers).
+
+@Async only works through the Spring proxy. Calling an @Async method from another method in the same class runs it on the caller's thread, synchronously.
+
+# Queue listeners: "only so many at once"
+
+Your services also pull messages off a broker: Kafka, RabbitMQ or SQS. The listener is a pool too. Each listener container runs a fixed number of consumer threads. That number is its concurrency, and it is exactly "how many messages we process at once".
+
+There is one big difference from @Async: listeners pull. A consumer thread only fetches more messages when it is ready. So extra messages wait safely in the broker, not in your JVM's memory. Backpressure comes for free.
+
+Figure: A broker holding many messages feeds a listener with concurrency 3: three consumer threads each process one message, the rest wait in the broker.
+
+This is how you set it in each of the common Spring integrations:
+
+The code here is a Kafka listener on the orders topic with a concurrency of 3, which means three consumer threads.
+
+The settings here start RabbitMQ with 3 consumers, let them grow to 10 under load, and allow 50 unacknowledged messages per consumer.
+
+The code here is an SQS listener on the shipments queue that keeps up to 10 messages in flight and pulls up to 10 per poll.
+
+Two details worth knowing now (Chapter 7 goes deep):
+
+Kafka: each partition is read by one consumer in the group at a time. With 6 partitions, concurrency = 10 leaves 4 threads idle.
+
+Prefetch (Rabbit) and max poll (Kafka max.poll.records, default 500) are how many messages are fetched ahead into memory. Concurrency is how many are processed at once. They are different knobs.
+
+Why it matters: A bounded pool turns "too much work" into something you can see and control: a full queue, a rejected task, a broker lag that grows. An unbounded one turns it into slow, mysterious failure. "Only so many running at once" is not a weakness of your services. It is what keeps a spike from taking them down, and what protects the database behind them.
+
+Recap:
+
+1. A pool is threads plus a queue. New tasks go: core thread to queue to extra thread to reject. The queue fills before the pool grows.
+
+2. Always bound the queue and name the pool's threads. Spring Boot's default executor has an unbounded queue.
+
+3. Queue listeners are pools that pull: concurrency is "how many at once", and extra messages wait in the broker.
