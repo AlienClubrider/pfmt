@@ -78,7 +78,7 @@ Latency: How long one request takes, start to finish.
 
 Throughput: How many requests (or messages) are finished per second.
 
-Little's law: In flight = rate times time each. 1,000 or s times 0.05 s = 50 at once.
+Little's law: In flight = rate times time each. 1,000 per second times 0.05 seconds = 50 at once.
 
 Context switch: The CPU stopping one thread to run another. Cheap once, costly by the million.
 
