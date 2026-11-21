@@ -52,7 +52,7 @@ Here is the one formula worth remembering. It is called Little's law, and in pla
 
 in progress at once = arrivals per second times seconds each one takes
 
-In the kitchen: if 60 orders come in per hour and each spends 10 minutes being cooked, then on average 60 times (10 or 60) = 10 orders are in the kitchen at any moment. If every order needs a cook for its whole 10 minutes, you need about 10 cooks.
+In the kitchen: if 60 orders come in per hour and each spends 10 minutes being cooked, then on average 60 an hour times one sixth of an hour = 10 orders are in the kitchen at any moment. If every order needs a cook for its whole 10 minutes, you need about 10 cooks.
 
 For a service: one instance gets 800 requests per second. Five instances behind a load balancer make that 4,000 per second, "thousands per second". Each request holds a Tomcat thread for its whole duration. So:
 
