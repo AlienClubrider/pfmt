@@ -1,6 +1,5 @@
 ---
 // The copper penny with an upright p, and the full name in letter-spaced caps.
 import { coinShapes } from '../lib/coin.mjs';
-const id = `coin-${Math.random().toString(36).slice(2, 8)}`;
 ---
-<span class="wm wm-d"><svg class="coin" viewBox="0 0 40 40" aria-hidden="true" set:html={coinShapes(id)}></svg><span class="name">Penny for My Thoughts</span></span>
+<span class="wm wm-d"><svg class="coin" viewBox="0 0 40 40" aria-hidden="true" set:html={coinShapes()}></svg><span class="name">Penny for My Thoughts</span></span>

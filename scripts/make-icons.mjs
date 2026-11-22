@@ -5,7 +5,7 @@ import { chromium } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { COPPER, SERIF, coinShapes, coinSvg } from '../src/lib/coin.mjs';
 
-const ICON_DIR = 'public/icons/v3', COVER_PATH = 'public/podcast-cover-v3.png';
+const ICON_DIR = 'public/icons/v4', COVER_PATH = 'public/podcast-cover-v4.png';
 const INK = '#16181c', NAME = '#e9e5dc';
 
 // The coin in its 40×40 box. `scale` grows or shrinks it about the centre.
