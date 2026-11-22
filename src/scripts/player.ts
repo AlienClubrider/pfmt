@@ -1,8 +1,11 @@
 // The site's one audio player. Nothing shows until the reader presses a Listen button.
 // The <audio> and the mini bar live in a transition:persist element, so audio keeps going across page changes.
 // Rules from the mockups: X stops and hides it; the chevron shrinks it to a pill; auto-next plays the queue in order.
+// The lock screen and car get title, series and part, the penny, play/pause, ±15 s, scrub and previous/next.
+// Once the reader is into an episode, the service worker is asked to keep it for offline listening.
+import { worthKeeping } from '../lib/offline';
 
-interface Item { id: string; title: string; cat: string; href: string; src: string; fallback: string; seconds: number }
+interface Item { id: string; title: string; cat: string; album: string; href: string; src: string; fallback: string; seconds: number }
 interface State { cur?: string; pos: Record<string, number>; speed: number; auto: boolean; open: boolean; collapsed: boolean }
 
 const KEY = 'pfmt-player-v1';
@@ -31,6 +34,7 @@ const dur = (id: string) => byId(id)?.seconds || 1;
 const pos = (id: string) => st.pos[id] || 0;
 const progress = (id: string) => Math.min(1, pos(id) / dur(id));
 const nextOf = (id: string) => { const i = queue.findIndex(q => q.id === id); return i >= 0 ? queue[i + 1] : undefined; };
+const prevOf = (id: string) => { const i = queue.findIndex(q => q.id === id); return i > 0 ? queue[i - 1] : undefined; };
 
 let audio: HTMLAudioElement;
 const playing = () => !!audio && !audio.paused && !audio.ended;
@@ -56,15 +60,37 @@ function close() { audio.pause(); st.open = false; st.collapsed = false; save();
 function seek(d: number) { if (!st.cur) return; const t = Math.min(dur(st.cur), Math.max(0, (audio.dataset.id === st.cur ? audio.currentTime : pos(st.cur)) + d)); st.pos[st.cur] = t; if (audio.dataset.id === st.cur) audio.currentTime = t; save(); render(); }
 function setSpeed(s: number) { st.speed = s; if (audio) audio.playbackRate = s; save(); render(); }
 
+const BASE = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const ARTWORK = [192, 512].map(n => ({ src: `${BASE}icons/icon-${n}.png`, sizes: `${n}x${n}`, type: 'image/png' }));
+const jump = (to?: Item) => { if (to) { st.pos[to.id] = 0; play(to.id); } };
+
 function mediaSession(it: Item) {
   if (!('mediaSession' in navigator)) return;
-  navigator.mediaSession.metadata = new MediaMetadata({ title: it.title, artist: 'Penny for My Thoughts' });
+  navigator.mediaSession.metadata = new MediaMetadata({ title: it.title, artist: 'Penny for My Thoughts', album: it.album, artwork: ARTWORK });
   const h: [MediaSessionAction, MediaSessionActionHandler][] = [
     ['play', () => st.cur && play(st.cur)], ['pause', () => audio.pause()],
-    ['seekbackward', () => seek(-15)], ['seekforward', () => seek(30)],
-    ['nexttrack', () => { const n = st.cur && nextOf(st.cur); if (n) { st.pos[n.id] = 0; play(n.id); } }],
+    ['seekbackward', d => seek(-(d.seekOffset || 15))], ['seekforward', d => seek(d.seekOffset || 15)],
+    ['seekto', d => { if (d.seekTime != null && st.cur) seek(d.seekTime - (audio.dataset.id === st.cur ? audio.currentTime : pos(st.cur))); }],
+    ['previoustrack', () => { if (!st.cur) return; if (audio.currentTime > 5) seek(-audio.currentTime); else jump(prevOf(st.cur)); }],
+    ['nexttrack', () => jump(st.cur ? nextOf(st.cur) : undefined)],
   ];
   for (const [k, f] of h) try { navigator.mediaSession.setActionHandler(k, f); } catch { /* unsupported action */ }
+}
+
+function sessionPosition() {
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.playbackState = playing() ? 'playing' : 'paused';
+  if (!audio.duration || !isFinite(audio.duration)) return;
+  try { navigator.mediaSession.setPositionState({ duration: audio.duration, position: Math.min(audio.currentTime, audio.duration), playbackRate: audio.playbackRate || 1 }); } catch { /* older browsers */ }
+}
+
+// Ask the service worker to keep this episode on the device (it decides about room and the 150 MB cap).
+const kept = new Set<string>();
+function keepOffline(id: string) {
+  const src = audio.currentSrc;
+  if (kept.has(id) || !src || !worthKeeping(pos(id), dur(id)) || !navigator.serviceWorker?.controller) return;
+  kept.add(id);
+  navigator.serviceWorker.controller.postMessage({ type: 'keep-audio', src });
 }
 
 function listenLabel(id: string, mins: number) {
@@ -121,11 +147,11 @@ function init() {
     audio.addEventListener('timeupdate', () => {
       const id = audio.dataset.id; if (!id) return;
       st.pos[id] = audio.currentTime;
-      const s = Math.floor(audio.currentTime); if (s !== last) { last = s; save(); render(); }
+      const s = Math.floor(audio.currentTime); if (s !== last) { last = s; save(); render(); sessionPosition(); keepOffline(id); }
     });
-    audio.addEventListener('play', render); audio.addEventListener('pause', () => { save(); render(); });
+    audio.addEventListener('play', () => { render(); sessionPosition(); }); audio.addEventListener('pause', () => { save(); render(); sessionPosition(); });
     audio.addEventListener('ended', () => {
-      const id = audio.dataset.id!; st.pos[id] = dur(id);
+      const id = audio.dataset.id!; st.pos[id] = dur(id); keepOffline(id);
       const n = nextOf(id);
       if (st.auto && n) { st.pos[n.id] = 0; play(n.id); } else { save(); render(); }
     });

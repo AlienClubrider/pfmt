@@ -416,3 +416,18 @@ body.on-listen .mini { display: none !important; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 :root[data-theme="dark"] .when-light, :root:not([data-theme="dark"]) .when-dark { display: none; }
 .visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- installed app ---------- */
+.side .install { display: flex; align-items: center; margin-top: 26px; border-top: 1px solid var(--rule); padding-top: 14px; }
+.side .install[hidden] { display: none; }
+.side .install [data-install-go] { flex: 1; display: flex; align-items: center; gap: 12px; padding: 7px 12px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: .94rem; cursor: pointer; text-align: left; }
+.side .install [data-install-go]:hover { background: var(--bg-2); color: var(--text); }
+.side .install svg { width: 18px; height: 18px; }
+.side .install .icon-btn { color: var(--faint); }
+.ios-hint { position: fixed; z-index: 49; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); max-width: 420px; margin: 0 auto; display: flex; align-items: center; gap: 6px;
+  padding: 8px 6px 8px 16px; border: 1px solid var(--rule); border-radius: 14px; background: var(--surface); color: var(--muted); font-size: .88rem; box-shadow: 0 6px 24px rgb(0 0 0 / .08); }
+.ios-hint p { margin: 0; flex: 1; }
+.ios-hint p .i { width: 16px; height: 16px; vertical-align: -3px; color: var(--link); }
+body.has-mini .ios-hint { bottom: calc(76px + env(safe-area-inset-bottom)); }
+.saved-list { margin: 0 0 22px; padding-left: 1.1rem; }
+.saved-list li { margin: 4px 0; }

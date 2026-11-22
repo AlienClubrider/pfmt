@@ -15,6 +15,7 @@ const I: Record<string, string> = {
   down: '<path d="m6 9 6 6 6-6"/>',
   up: '<path d="m6 15 6-6 6 6"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  install: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/>',
 };
 interface Props { name: keyof typeof I | string; class?: string }
 const { name, class: cls = 'i' } = Astro.props;

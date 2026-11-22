@@ -1,7 +1,7 @@
 // Adapter between Astro (content collection, base path, audio manifest) and the pure rules in posts.ts.
 import { getCollection, type CollectionEntry } from 'astro:content';
 import audioJson from '../data/audio.json';
-import { published, listenQueue, type Post } from './posts';
+import { published, listenQueue, partLabel, CATEGORIES, type Post } from './posts';
 
 export type PostEntry = CollectionEntry<'posts'>;
 export interface Audio { src: string; fallback: string; seconds: number; bytes: number; fallbackBytes?: number; voice?: string }
@@ -30,7 +30,8 @@ export async function queueData() {
   const posts = await allPosts();
   return listenQueue(posts as unknown as Post[], id => !!audioOf(id)).map(p => {
     const e = p as unknown as PostEntry, a = audioOf(e.id)!;
-    return { id: e.id, title: e.data.title, cat: e.data.category, href: postUrl(e), src: url(a.src), fallback: url(a.fallback), seconds: a.seconds };
+    const album = e.data.series ? `${e.data.series.title} · ${partLabel(e.data)}` : CATEGORIES[e.data.category].name;
+    return { id: e.id, title: e.data.title, cat: e.data.category, album, href: postUrl(e), src: url(a.src), fallback: url(a.fallback), seconds: a.seconds };
   });
 }
 export type QueueItem = Awaited<ReturnType<typeof queueData>>[number];

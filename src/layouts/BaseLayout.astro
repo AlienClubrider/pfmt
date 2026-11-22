@@ -31,6 +31,11 @@ const FAV = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle
   <meta property="og:type" content={page === 'post' ? 'article' : 'website'} />
   <meta property="og:url" content={canonical} />
   <link rel="icon" type="image/svg+xml" href={`data:image/svg+xml,${encodeURIComponent(FAV)}`} />
+  <link rel="manifest" href={url('manifest.webmanifest')} />
+  <link rel="apple-touch-icon" href={url('icons/apple-touch-icon.png')} />
+  <meta name="apple-mobile-web-app-title" content="Penny" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <link rel="alternate" type="application/rss+xml" title={`${SITE.title} (podcast)`} href={url('podcast.xml')} />
   <script is:inline>
     // theme before first paint: saved choice, then the system setting
@@ -61,6 +66,7 @@ const FAV = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle
       {(Object.keys(CATEGORIES) as (keyof typeof CATEGORIES)[]).map(k => (
         <a href={url(`${k}/`)} class={`cat-${k} ${on(page === 'cat' && current === k)}`}><span class="dot"></span>{CATEGORIES[k].name}<span class="n">{countIn(posts as unknown as Post[], k)}</span></a>
       ))}
+      <div class="install" data-install hidden><button type="button" data-install-go><Icon name="install" />Install the app</button><button class="icon-btn sm" type="button" data-install-no aria-label="Hide install"><Icon name="x" /></button></div>
     </nav>
     <main class="main" id="content">
       <slot />
@@ -83,6 +89,7 @@ const FAV = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle
   <script type="application/json" id="pfmt-queue" set:html={JSON.stringify(queue)} />
   <script>
     import '../scripts/player';
+    import '../scripts/installable';
     // drawer + theme toggle, wired once for every page
     document.addEventListener('click', e => {
       const t = (e.target as Element).closest<HTMLElement>('[data-drawer],[data-theme-toggle]');

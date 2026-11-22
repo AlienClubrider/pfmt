@@ -1,0 +1,38 @@
+---
+// Shown by the service worker when the reader is offline and the page they asked for was never opened.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { url } from '../lib/site';
+---
+<BaseLayout title="You’re offline" page="404">
+  <div class="wrap">
+    <section class="not-found">
+      <span class="eyebrow-label">Offline</span>
+      <h1>No connection right now</h1>
+      <p>This page hasn’t been opened on this device yet, so it isn’t saved. Posts you’ve opened before still work.</p>
+      <ul class="saved-list" data-saved hidden></ul>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn primary" href={url()}>Home</a><button class="btn" type="button" onclick="location.reload()">Try again</button></div>
+    </section>
+  </div>
+</BaseLayout>
+<script>
+  // List the posts this device has kept, newest-kept first, read from the service worker's page cache.
+  async function listSaved() {
+    const ul = document.querySelector<HTMLUListElement>('[data-saved]');
+    if (!ul || !('caches' in window)) return;
+    const c = await caches.open('pfmt-pages');
+    const items: { href: string; title: string }[] = [];
+    for (const req of [...await c.keys()].reverse()) {
+      if (!/\/posts\/[^/]+\/$/.test(new URL(req.url).pathname)) continue;
+      const html = await (await c.match(req))!.text();
+      const t = /<title>([^<]*)<\/title>/.exec(html)?.[1].split(' · ')[0];
+      if (t) items.push({ href: req.url, title: new DOMParser().parseFromString(t, 'text/html').body.textContent || t });
+    }
+    ul.replaceChildren(...items.map(i => {
+      const li = document.createElement('li');
+      li.append(Object.assign(document.createElement('a'), { href: i.href, textContent: i.title }));
+      return li;
+    }));
+    ul.hidden = items.length === 0;
+  }
+  document.addEventListener('astro:page-load', listSaved);
+</script>
