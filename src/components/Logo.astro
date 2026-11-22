@@ -1,5 +1,6 @@
 ---
-// Title D: the copper penny with an italic p, and the full name in letter-spaced caps.
-const SERIF = 'Iowan Old Style, Palatino, Georgia, serif';
+// The copper penny with an upright p, and the full name in letter-spaced caps.
+import { coinShapes } from '../lib/coin.mjs';
+const id = `coin-${Math.random().toString(36).slice(2, 8)}`;
 ---
-<span class="wm wm-d"><svg class="coin" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="var(--accent)"/><circle cx="20" cy="20" r="14.2" fill="none" stroke="var(--bg)" stroke-opacity=".5" stroke-width="1.2"/><text x="20" y="27" text-anchor="middle" font-family={SERIF} font-size="19" font-weight="700" font-style="italic" fill="var(--bg)">p</text></svg><span class="name">Penny for My Thoughts</span></span>
+<span class="wm wm-d"><svg class="coin" viewBox="0 0 40 40" aria-hidden="true" set:html={coinShapes(id)}></svg><span class="name">Penny for My Thoughts</span></span>

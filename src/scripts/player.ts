@@ -61,7 +61,7 @@ function seek(d: number) { if (!st.cur) return; const t = Math.min(dur(st.cur), 
 function setSpeed(s: number) { st.speed = s; if (audio) audio.playbackRate = s; save(); render(); }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/?$/, '/');
-const ARTWORK = [192, 512].map(n => ({ src: `${BASE}icons/v2/icon-${n}.png`, sizes: `${n}x${n}`, type: 'image/png' }));
+const ARTWORK = [192, 512].map(n => ({ src: `${BASE}icons/v3/icon-${n}.png`, sizes: `${n}x${n}`, type: 'image/png' }));
 const jump = (to?: Item) => { if (to) { st.pos[to.id] = 0; play(to.id); } };
 
 function mediaSession(it: Item) {

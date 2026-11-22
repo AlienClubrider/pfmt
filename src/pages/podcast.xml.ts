@@ -37,7 +37,7 @@ export const GET: APIRoute = async ({ site }) => {
       author: 'Bryson Bailey',
       siteUrl: root.href,
       feedUrl: abs('podcast.xml'),
-      artworkUrl: abs('podcast-cover-v2.png'),
+      artworkUrl: abs('podcast-cover-v3.png'),
       language: 'en-us',
       categories: [{ name: 'Religion & Spirituality', sub: 'Christianity' }, { name: 'Technology' }],
     },

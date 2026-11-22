@@ -6,7 +6,7 @@ const BASE = new URL(self.registration.scope).pathname;
 const SHELL = `pfmt-shell-${VERSION}`, PAGES = 'pfmt-pages', ASSETS = 'pfmt-assets', AUDIO = 'pfmt-audio';
 const PAGE_LIMIT = 80, ASSET_LIMIT = 120;
 const OFFLINE = BASE + 'offline/';
-const SHELL_URLS = [BASE, OFFLINE, BASE + 'manifest.webmanifest', BASE + 'icons/v2/icon-192.png', BASE + 'icons/v2/icon-512.png'];
+const SHELL_URLS = [BASE, OFFLINE, BASE + 'manifest.webmanifest', BASE + 'icons/v3/icon-192.png', BASE + 'icons/v3/icon-512.png'];
 
 // Keep at most `limit` entries in a cache; the oldest put goes first.
 const trim = async (name, limit) => {
