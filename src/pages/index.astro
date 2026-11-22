@@ -13,7 +13,7 @@ const recent = rest.slice(0, 6);
 <BaseLayout page="home">
   <div class="wrap">
     <section class="masthead">
-      <p><b>Notes on faith and the things I find.</b> The Bible read slowly, the big words made plain and the hard questions taken seriously, plus the tech I keep using, some of it as illustrated series. Read them, or listen.</p>
+      <p><b>Faith, tech, and things I keep thinking about.</b> Read it, or press play.</p>
       <div class="topics chips">{(Object.keys(CATEGORIES) as (keyof typeof CATEGORIES)[]).map(k => <a class={`chip cat-${k}`} href={url(`${k}/`)}><span class="dot"></span>{CATEGORIES[k].name}</a>)}</div>
     </section>
     {f && (
