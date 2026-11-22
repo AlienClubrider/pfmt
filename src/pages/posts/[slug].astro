@@ -35,9 +35,9 @@ const label = (p: PostEntry, dir: string) => p.data.series ? `${dir === 'prev' ?
         <p class="lede">{d.summary}</p>
         <div class="meta" data-pagefind-ignore><span>{SITE.author}</span><span>{formatDate(d.date)}</span><span>{d.readingMinutes} min read</span></div>
       </header>
-      <span hidden data-pagefind-filter="topic">{CATEGORIES[d.category].name}</span>
-      <span hidden data-pagefind-meta="topic">{CATEGORIES[d.category].name}</span>
-      {d.series && <span hidden data-pagefind-meta="series">{`${d.series.title} · ${partLabel(d)}`}</span>}
+      <span hidden data-pagefind-ignore data-pagefind-filter="topic">{CATEGORIES[d.category].name}</span>
+      <span hidden data-pagefind-ignore data-pagefind-meta="topic">{CATEGORIES[d.category].name}</span>
+      {d.series && <span hidden data-pagefind-ignore data-pagefind-meta="series">{`${d.series.title} · ${partLabel(d)}`}</span>}
       {d.series && <div data-pagefind-ignore><SeriesNav post={post} parts={parts} /></div>}
       {a && (
         <div class="listen-line" data-pagefind-ignore>

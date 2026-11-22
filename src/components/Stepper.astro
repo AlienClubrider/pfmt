@@ -8,7 +8,8 @@
 
 <script>
   function initStepper(fig: HTMLElement) {
-    if (fig.dataset.ready) return;
+    // dataset values are strings, so test presence: an empty string would read as "not ready"
+    if ('ready' in fig.dataset) return;
     const svg = fig.querySelector('svg');
     const notes = fig.querySelector<HTMLOListElement>('.step-notes');
     const items = notes ? Array.from(notes.querySelectorAll('li')) : [];
@@ -16,6 +17,24 @@
     if (!svg || !notes || total < 1) return;
     fig.dataset.ready = '';
     notes.setAttribute('aria-live', 'polite');
+    // hidden notes don't count in a CSS counter, so number each one up front
+    items.forEach((li, i) => { li.dataset.n = String(i + 1); });
+    const box = svg.viewBox.baseVal;
+    const full = { y: box.y, h: box.height };
+    // Shrink the picture to what this step shows, so later steps don't leave a blank box.
+    const fit = () => {
+      const r = svg.getBoundingClientRect();
+      if (!r.width || !box.width) return;
+      const k = (box.width) / r.width;
+      let bottom = 0;
+      svg.querySelectorAll<SVGGraphicsElement>('rect,circle,ellipse,line,path,polygon,polyline,text,use,image').forEach((e) => {
+        if (e.closest('.is-off,defs,marker,clipPath,mask,pattern')) return;
+        const b = e.getBoundingClientRect();
+        if (b.height || b.width) bottom = Math.max(bottom, (b.bottom - r.top) * k + box.y);
+      });
+      const h = Math.min(full.h, Math.max(0, bottom - full.y) + 16);
+      if (h > 0 && Math.abs(h - box.height) > 0.5) svg.setAttribute('viewBox', `${box.x} ${full.y} ${box.width} ${h}`);
+    };
     const stepEls = Array.from(svg.querySelectorAll<SVGElement>('[data-step]'));
     const onlyEls = Array.from(svg.querySelectorAll<SVGElement>('[data-only]'));
     let cur = 1;
@@ -50,6 +69,7 @@
       back.disabled = cur === 1;
       next.disabled = cur === total;
       play.textContent = timer ? 'Pause' : cur === total ? 'Replay' : 'Play';
+      fit();
     };
     const go = (n: number) => { cur = Math.max(1, Math.min(total, n)); render(); };
     const stop = () => { if (timer) { clearInterval(timer); timer = undefined; } render(); };
@@ -67,6 +87,6 @@
   }
 
   const initAll = () => document.querySelectorAll<HTMLElement>('.fig.stepper').forEach(initStepper);
-  initAll();
+  // astro:page-load fires on the first load and after every client-side navigation
   document.addEventListener('astro:page-load', initAll);
 </script>
