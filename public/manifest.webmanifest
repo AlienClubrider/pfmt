@@ -1,7 +1,7 @@
 {
   "id": "./",
   "name": "Penny for My Thoughts",
-  "short_name": "Penny",
+  "short_name": "pfmt",
   "description": "Notes on faith and the tech I like, by Bryson Bailey. Every post can be read or heard.",
   "start_url": "./",
   "scope": "./",
