@@ -6,7 +6,7 @@ import TopicTag from '../../components/TopicTag.astro';
 import ListenButton from '../../components/ListenButton.astro';
 import SeriesNav from '../../components/SeriesNav.astro';
 import { CATEGORIES, formatDate, neighbours, seriesParts, partLabel, type Post } from '../../lib/posts';
-import { allPosts, audioOf, postUrl, url, SITE, type PostEntry } from '../../lib/site';
+import { allPosts, audioOf, postUrl, url, SITE, PREVIEW, type PostEntry } from '../../lib/site';
 import Stepper from '../../components/Stepper.astro';
 import '../../styles/book-figures.css';
 
@@ -29,6 +29,7 @@ const label = (p: PostEntry, dir: string) => p.data.series ? `${dir === 'prev' ?
   <div class="art-grid">
     <article class={`cat-${d.category}`} data-pagefind-body>
       <nav class="crumbs" data-pagefind-ignore><a class="back" href={url(`${d.category}/`)}><Icon name="back" />{CATEGORIES[d.category].name}</a></nav>
+      {PREVIEW && d.status !== 'published' && <p class="draft-banner" role="note" data-pagefind-ignore><b>{d.status === 'review' ? 'IN REVIEW' : 'DRAFT'} - not public.</b> Waiting for Bryson's OK before it goes on the site.</p>}
       <header class="art-head">
         <span data-pagefind-ignore><TopicTag post={post} /></span>
         <h1 data-pagefind-meta="title">{d.title}</h1>

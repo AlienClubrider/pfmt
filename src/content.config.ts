@@ -16,7 +16,8 @@ const posts = defineCollection({
       tags: z.array(z.string()).default([]),
       readingMinutes: z.number().int().positive(),
       cover: z.string().optional(),
-      draft: z.boolean().default(false),
+      // draft -> review -> published. Only published posts reach the public site; see README.
+      status: z.enum(['draft', 'review', 'published']).default('draft'),
     })
     .refine(p => !p.series || (p.part && p.partsTotal), { message: 'a series post needs part and partsTotal' }),
 });

@@ -15,8 +15,8 @@ const s = post.data.series!;
     {next ? <a class="step" href={postUrl(next)} aria-label={`Next part: ${next.data.title}`}><Icon name="next" /></a> : <span class="step" aria-disabled="true"><Icon name="next" /></span>}
   </div>
   <details data-series-list>
-    <summary>All {parts.length} parts<Icon name="down" /></summary>
-    <ol>{parts.map(p => <li class={p.id === post.id ? 'on' : ''}><a href={postUrl(p)} aria-current={p.id === post.id ? 'page' : undefined}><span>{p.data.title}</span><small>{p.id === post.id ? 'reading' : `${p.data.readingMinutes} min`}</small></a></li>)}</ol>
+    <summary>{parts.length < (post.data.partsTotal ?? 0) ? `${parts.length} of ${post.data.partsTotal} parts out so far` : `All ${parts.length} parts`}<Icon name="down" /></summary>
+    <ol>{parts.map(p => <li class={p.id === post.id ? 'on' : ''}><a href={postUrl(p)} data-part={p.data.part} aria-current={p.id === post.id ? 'page' : undefined}><span>{p.data.title}</span><small>{p.id === post.id ? 'reading' : `${p.data.readingMinutes} min`}</small></a></li>)}</ol>
   </details>
 </nav>
 <script>

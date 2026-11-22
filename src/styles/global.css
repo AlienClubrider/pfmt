@@ -235,10 +235,9 @@ body.has-mini .main { padding-bottom: 130px; }
 .series summary::-webkit-details-marker { display: none; }
 .series summary svg { width: 16px; height: 16px; transition: transform .15s; }
 .series details[open] summary svg { transform: rotate(180deg); }
-.series ol { list-style: none; margin: 0; padding: 0 6px 8px; counter-reset: part; }
-.series li { counter-increment: part; }
+.series ol { list-style: none; margin: 0; padding: 0 6px 8px; }
 .series li a { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 6px 8px; border-radius: 8px; color: var(--text); text-decoration: none !important; line-height: 1.35; }
-.series li a::before { content: counter(part); color: var(--faint); font-variant-numeric: tabular-nums; font-weight: 650; text-align: right; }
+.series li a::before { content: attr(data-part); /* the real part number, so a part still in review leaves a gap */ color: var(--faint); font-variant-numeric: tabular-nums; font-weight: 650; text-align: right; }
 .series li a:hover { background: var(--bg-2); }
 .series li a small { color: var(--faint); font-size: .8rem; white-space: nowrap; }
 .series li.on a { background: color-mix(in srgb, var(--cc) 10%, transparent); font-weight: 650; }
@@ -431,3 +430,9 @@ body.on-listen .mini { display: none !important; }
 body.has-mini .ios-hint { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .saved-list { margin: 0 0 22px; padding-left: 1.1rem; }
 .saved-list li { margin: 4px 0; }
+
+/* Private preview build only (PFMT_PREVIEW=1): never rendered on the public site. */
+.preview-bar { position: relative; z-index: 41; padding: 6px 16px; background: #7a1f12; color: #fff; font-size: .84rem; font-weight: 600; text-align: center; }
+.draft-banner { margin: 0 0 18px; padding: 10px 14px; border: 2px solid var(--accent); border-radius: 8px; background: var(--bg-2); color: var(--text); font-size: .95rem; }
+.draft-banner b { color: var(--accent); letter-spacing: .04em; }
+.status-tag { display: inline-block; margin-bottom: 6px; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }

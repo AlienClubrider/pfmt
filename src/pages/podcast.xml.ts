@@ -1,6 +1,6 @@
 // /podcast.xml: every post that has narration becomes an episode (AAC .m4a enclosure).
 import type { APIRoute } from 'astro';
-import { getCollection } from 'astro:content';
+import { allPosts } from '../lib/site';
 import audio from '../data/audio.json';
 import { podcastFeed, type Episode } from '../lib/podcast';
 
@@ -11,7 +11,7 @@ export const GET: APIRoute = async ({ site }) => {
   const root = new URL(import.meta.env.BASE_URL.replace(/\/?$/, '/'), site);
   const abs = (path: string) => new URL(path.replace(/^\//, ''), root).href;
 
-  const posts = await getCollection('posts', (p) => !p.data.draft && p.id in manifest);
+  const posts = (await allPosts()).filter((p) => p.id in manifest);
   const episodes: Episode[] = posts.map((p) => {
     const a = manifest[p.id];
     return {

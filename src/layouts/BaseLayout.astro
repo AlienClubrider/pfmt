@@ -3,7 +3,7 @@ import { ClientRouter } from 'astro:transitions';
 import Icon from '../components/Icon.astro';
 import Logo from '../components/Logo.astro';
 import { CATEGORIES, countIn, type Post } from '../lib/posts';
-import { allPosts, queueData, url, SITE } from '../lib/site';
+import { allPosts, queueData, url, SITE, PREVIEW } from '../lib/site';
 import '../styles/global.css';
 
 interface Props { title?: string; description?: string; page: 'home' | 'cat' | 'post' | 'listen' | 'search' | '404'; current?: string; noFooter?: boolean }
@@ -23,6 +23,7 @@ const FAV = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>{fullTitle}</title>
   <meta name="description" content={description} />
+  {PREVIEW && <meta name="robots" content="noindex, nofollow" />}
   <link rel="canonical" href={canonical} />
   <meta name="theme-color" content="#fbf8f2" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)" />
@@ -48,6 +49,7 @@ const FAV = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle
 </head>
 <body class={page === 'listen' ? 'on-listen' : ''}>
   <a class="skip" href="#content">Skip to the content</a>
+  {PREVIEW && <div class="preview-bar" role="note">Private preview, not the public site</div>}
   <header class="top">
     <button class="icon-btn only-phone" type="button" data-drawer aria-label="Menu"><Icon name="menu" /></button>
     <a class="brand" href={url()}><Logo /><span class="visually-hidden">, home</span></a>

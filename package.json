@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
-    "build": "ASTRO_TELEMETRY_DISABLED=1 astro build && pagefind --site dist --output-subdir pagefind",
+    "build": "ASTRO_TELEMETRY_DISABLED=1 astro build && node scripts/prune-unpublished.mjs dist && pagefind --site dist --output-subdir pagefind",
+    "preview:build": "scripts/preview-build",
     "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
     "check": "ASTRO_TELEMETRY_DISABLED=1 astro check",
     "test": "node --test src/lib/*.test.mjs",

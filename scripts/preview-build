@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Build the private preview (everything, drafts and posts in review included) and copy it to
+# ~/wiz-share/pfmt/preview/, served at https://wiz.theprintingpixel.com/pfmt/preview/ behind Cloudflare login.
+# Never link it from the public site. Override the target with PFMT_PREVIEW_DIR.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+dest="${PFMT_PREVIEW_DIR:-$HOME/wiz-share/pfmt/preview}"
+export PFMT_PREVIEW=1 ASTRO_TELEMETRY_DISABLED=1
+npx astro build
+npx pagefind --site dist-preview --output-subdir pagefind
+mkdir -p "$dest"
+rsync -a --delete dist-preview/ "$dest/"
+echo "preview: $dest -> https://wiz.theprintingpixel.com/pfmt/preview/"
