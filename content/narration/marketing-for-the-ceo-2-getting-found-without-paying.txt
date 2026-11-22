@@ -6,7 +6,7 @@ Most of an app's best users find it without a single ad: they search, browse the
 
 In Chapter 1 you met owned, earned and paid attention. This chapter is the owned and earned side: channels where you don't pay per person who sees you.
 
-"Free" is a little misleading. You pay in time and patience instead of cash. Somebody has to write the pages, polish the store listing, show up in communities and send the emails. With an AI team doing most of that work, time is cheaper for you than for most small studios. That makes these channels a good place to start.
+"Free" is a little misleading. You pay in time and patience instead of cash. Somebody has to write the pages, polish the store listing, show up in communities and send the emails. AI tools can now draft a lot of that work, so the time cost is lower than it used to be. That makes these channels a good place to start.
 
 In the shop: Picture your shop again. You can get customers without buying a single flyer:
 
@@ -24,17 +24,17 @@ Hand out a loyalty card and let regulars bring friends (email list and referrals
 
 SEO (search engine optimization) means making your web pages show up when people search on Google and other search engines. It is how your shop ends up on the busy street.
 
-It starts with keywords: the actual words people type. Behind every search is a search intent, the thing the person really wants. "who wins a tie in Catan" means "settle this argument at my table, now". It does not mean "sell me an app".
+It starts with keywords: the actual words people type. Behind every search is a search intent, the thing the person really wants. "chicken and rice dinner ideas" means "give me something to cook tonight". It does not mean "sell me an app".
 
-So the job is simple to say: for each question your users ask, have one page on your site that answers it clearly, better than anything else out there. For RuleBuddy that could be one short page per popular game and common rules question, each ending with a gentle "ask RuleBuddy about any game".
+So the job is simple to say: for each question your users ask, have one page on your site that answers it clearly, better than anything else out there. For Pantry Pal that could be one short page per common dinner question, each ending with a gentle "plan your whole week with Pantry Pal".
 
-Figure: A person searches a rules question, picks the result that matches their question, reads the answer, and a few go on to try the app while most leave with their answer.
+Figure: A person searches a dinner question, picks the result that matches their question, reads the answer, and a few go on to try the app while most leave with their answer.
 
 Google and chat assistants now often answer before anyone clicks. The next section covers that.
 
 Watch out: SEO is slow. New pages often take weeks to months before they show up well, so judge it after a quarter, not a week. And never pad pages with keywords or mass-produce thin copies: search engines treat that as spam and can push the whole site down.
 
-Tell the team: "Find the 20 rules questions people search most for our top games, and write one honest answer page for each."
+Tell the team: "Find the 20 questions our customers search most, and write one honest answer page for each."
 
 # Getting found in AI answers
 
@@ -46,25 +46,25 @@ In the shop: Picture a well-known local guide standing on the street. Shoppers a
 
 What gets you named, as far as anyone can tell in 2026:
 
-Clear pages that answer real questions. The same rules-answer pages from the last section. A plain question as the heading and a direct answer in the first lines are easy for an assistant to quote.
+Clear pages that answer real questions. The same answer pages from the last section. A plain question as the heading and a direct answer in the first lines are easy for an assistant to quote.
 
 Being mentioned elsewhere. Assistants lean on what others say: Reddit threads, reviews, YouTube videos, "best apps for..." comparison pages. Honest mentions in those places count for more than anything on your own site.
 
-Being specific and trustworthy. The web is filling with bland AI-written pages. Real details (actual rulings from actual games, who wrote it, when it was checked) stand out, to people and to the AI that picks sources.
+Being specific and trustworthy. The web is filling with bland AI-written pages. Real details (recipes actually cooked and timed, who wrote it, when it was checked) stand out, to people and to the AI that picks sources.
 
 As of 2026: Google says its AI Overviews and AI Mode each reach well over a billion people a month. Each assistant cites different sources, and which sites they favour shifts from month to month. Ranking well on Google helps with Google's AI answers, but it predicts much less for ChatGPT or Gemini. Nobody can promise a citation, so treat this as part of SEO, not a separate bet.
 
 Watch out: Don't flood the web with AI-written pages or fake "reviews" to get mentioned. It's easy to spot, communities ban it, and it's the exact noise the assistants try to filter out. A few real, specific pages beat a hundred generic ones.
 
-Tell the team: "Ask ChatGPT, Gemini and Google which app helps with board game rules. Tell me who gets named and why, and what we'd need for RuleBuddy to be on that list."
+Tell the team: "Ask ChatGPT, Gemini and Google which product they'd recommend for the problem we solve. Tell me who gets named and why, and what we'd need to be on that list."
 
 # The app store: your shop window
 
-ASO (app store optimization) is SEO for the app store. People search inside Google Play and Apple's App Store too, and your listing is the shop window they judge you by. RuleBuddy is on Google Play today, with iPhone planned, so this matters now.
+ASO (app store optimization) is SEO for the app store. People search inside Google Play and Apple's App Store too, and your listing is the shop window they judge you by. If your product is an app, this matters from day one.
 
 Four things do most of the work:
 
-Name and subtitle. Say what it is in the words people search: "board game rules" beats a clever slogan.
+Name and subtitle. Say what it is in the words people search: "meal planner" beats a clever slogan.
 
 Keywords. The search words the store matches you on. On Apple you list them in a hidden field; Google Play picks them up from your description.
 
@@ -76,23 +76,23 @@ Figure: An app store listing on a phone, with labels for the name and subtitle, 
 
 As of 2026: Apple App Store: name up to 30 characters, subtitle up to 30, plus a hidden keyword field of 100 characters. Google Play: title up to 30 characters, short description up to 80, full description up to 4,000, and no keyword field, so the words in your text matter more. Both stores give apps an official in-app "rate this app" prompt and limit how often it can appear.
 
-Watch out: Never buy reviews, swap fake ones, or offer rewards for five stars. Both stores ban it and can pull the app. The honest version works: ask for a rating right after a good moment, like a question answered well.
+Watch out: Never buy reviews, swap fake ones, or offer rewards for five stars. Both stores ban it and can pull the app. The honest version works: ask for a rating right after a good moment, like a week planned in one go.
 
-Tell the team: "Rewrite RuleBuddy's Play listing around the words people search, redo the first three screenshots, and add a rating prompt after a good answer."
+Tell the team: "Rewrite our store listing around the words people search, redo the first three screenshots, and add a rating prompt after a good moment."
 
 # Social and communities: be a regular, not a billboard
 
-Content is anything useful or fun you publish: short videos, posts, guides. On social media (TikTok, Instagram, YouTube Shorts, X, and so on) it can reach people who weren't searching for you at all. A 30-second "the rule everyone gets wrong in Ticket to Ride" clip fits RuleBuddy well. One idea can become a page, a video and a post, so plan ideas, not posts.
+Content is anything useful or fun you publish: short videos, posts, guides. On social media (TikTok, Instagram, YouTube Shorts, X, and so on) it can reach people who weren't searching for you at all. A 30-second "five dinners from one grocery run" clip fits Pantry Pal well. One idea can become a page, a video and a post, so plan ideas, not posts.
 
-Communities are places where your kind of person already gathers: subreddits on Reddit, forums like BoardGameGeek, Discord servers, Facebook groups. Board gamers are a very community-minded crowd, which helps you.
+Communities are places where your kind of person already gathers: subreddits on Reddit, forums, group chats, Facebook groups. Parents swap meal ideas all the time, which helps you.
 
 The rule in communities is the rule at the local club: people welcome a regular who helps, and they show a salesman the door. Answer questions, be useful, mention the app only where it truly answers the question, and say you made it.
 
-RuleBuddy has a head start: it already has a Discord bot. A board game Discord server that adds the bot puts RuleBuddy in front of every member, every game night. Offer it to server admins; don't push it on them.
+Look for ways the product itself can live where people gather. If Pantry Pal let a parent post the week's plan straight into a family group chat, everyone in that chat would see it. Offer things like that where they help; don't push them.
 
 Watch out: Many subreddits and groups ban or limit self-promotion, and each has its own rules. Read them first. A burst of copy-paste posts from a new account gets removed, and can get the app's name banned in exactly the place you most want to be.
 
-Tell the team: "List the ten biggest board game communities, their self-promotion rules, and a plan to be genuinely helpful in three of them."
+Tell the team: "List the ten biggest communities where our customers gather, their self-promotion rules, and a plan to be genuinely helpful in three of them."
 
 # Launch days, the email list and referrals
 
@@ -104,21 +104,21 @@ Figure: A sketch of visitors per week over twelve weeks. A launch day spikes and
 
 # The email list: your loyalty card
 
-An email list is the people who gave you their address so you can write to them. It is the most owned channel you have: no algorithm decides whether they see you, and no platform can take it away. Use it for real news (new games supported, the iPhone version) and the occasional useful tip, not daily nagging. Collect addresses from day one, even before you need them, like a waitlist for the iPhone app.
+An email list is the people who gave you their address so you can write to them. It is the most owned channel you have: no algorithm decides whether they see you, and no platform can take it away. Use it for real news (a big new feature, a version for a new platform) and the occasional useful tip, not daily nagging. Collect addresses from day one, even before you need them, like a waitlist for a version you haven't built yet.
 
 # Referrals: regulars bringing friends
 
-Word of mouth is users telling others on their own. A referral program nudges it along: give users an easy way to invite a friend, often with a small reward for both. RuleBuddy has a built-in advantage here, since board games are played in groups: one user at the table can win over three more.
+Word of mouth is users telling others on their own. A referral program nudges it along: give users an easy way to invite a friend, often with a small reward for both. Pantry Pal has a built-in advantage here, since meal plans get shared: one parent who uses it can win over a partner and a couple of friends.
 
 Figure: A referral loop: a happy user shares an invite link, a friend considers it and joins, both get a reward, and the friend invites the next person.
 
-Tell the team: "Start an email list now with an iPhone waitlist, and design a simple invite-a-friend reward for RuleBuddy."
+Tell the team: "Start an email list now with a waitlist for our next big feature, and design a simple invite-a-friend reward."
 
 # Where to start
 
 You can't do all of these well at once. Here is how they compare. The timings are rough rules of thumb, not promises.
 
-The table rates each free channel for RuleBuddy: the app store and search are high and come first, communities and referrals are high, social content and launch sites are medium, and an email list should start now, small.
+The table rates each free channel for Pantry Pal: the app store and search are high and come first, communities and referrals are high, social content and launch sites are medium, and an email list should start now, small.
 
 A sensible order for one app: fix the shop window (ASO) so every visitor counts, then start the slow builders (search pages and community presence), and keep the email list and referrals running in the background. Save the launch day for something worth announcing.
 

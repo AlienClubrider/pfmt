@@ -10,7 +10,7 @@ What you buy is attention, not customers. The platform promises that people will
 
 In the shop: Back to our small shop. Ads are the flyers and billboards. Three kinds matter:
 
-Search ads are like paying to be the first name on the mall directory when someone asks "where can I buy board games?" They were already looking.
+Search ads are like paying to be the first name on the mall directory when someone asks "where can I buy a lunchbox?" They were already looking.
 
 Social ads are flyers handed to people walking past. They weren't looking for you, so the flyer has to stop them.
 
@@ -20,17 +20,17 @@ Flyers stop working the day you stop paying. Your sign, your busy street and you
 
 # Where you can buy ads
 
-There are many ad platforms, but for an app like RuleBuddy, five matter. The big difference between them is mindset: is the person searching for something like you, or scrolling for fun?
+There are many ad platforms, but for an app like Pantry Pal, five matter. The big difference between them is mindset: is the person searching for something like you, or scrolling for fun?
 
 Searching people are called high intent. They're easier to win but cost more per tap. Scrolling people are low intent. They're cheaper to reach, but your ad has to interrupt them.
 
-The table compares ad platforms: Meta for scrolling feeds, Google Search and Apple Ads for people already looking, TikTok for videos that feel native, and Reddit for reaching board game communities directly.
+The table compares ad platforms: Meta for scrolling feeds, Google Search and Apple Ads for people already looking, TikTok for videos that feel native, and Reddit for reaching cooking and parenting communities directly.
 
-As of 2026: Apple renamed Apple Search Ads to Apple Ads in 2025. One Meta Ads Manager runs ads across Facebook, Instagram, Messenger and its Audience Network of partner apps. Meta now runs much of its targeting automatically (it calls this Advantage+): you set a goal, a budget and a few ads, and its system picks who sees them. Google has a similar automatic option for apps, called App campaigns, which spreads one budget across Search, Google Play and YouTube. For websites, its all-in-one version is Performance Max. With targeting and placement automated, the levers left to you are mainly the creative and the budget. These products change often; the ads manager checks current options before each campaign.
+As of 2026: Apple renamed Apple Search Ads to Apple Ads in 2025. One Meta Ads Manager runs ads across Facebook, Instagram, Messenger and its Audience Network of partner apps. Meta now runs much of its targeting automatically (it calls this Advantage+): you set a goal, a budget and a few ads, and its system picks who sees them. Google has a similar automatic option for apps, called App campaigns, which spreads one budget across Search, Google Play and YouTube. For websites, its all-in-one version is Performance Max. With targeting and placement automated, the levers left to you are mainly the creative and the budget. These products change often; check the current options before each campaign.
 
 # How a campaign works: four dials
 
-A campaign is one ad push with one goal, such as "get sign-ups for RuleBuddy". Whatever the platform, you set four dials:
+A campaign is one ad push with one goal, such as "get sign-ups for Pantry Pal". Whatever the platform, you set four dials:
 
 1. Audience: who can see it. Country, age, interests, or "people like my users". On Meta in 2026 it is often left broad on purpose.
 
@@ -70,11 +70,11 @@ The ads dashboard shows smaller numbers that tell you where people drop off:
 
 The table explains the ad numbers: impressions, cost per thousand impressions, click-through rate, cost per click or install, and conversion rate.
 
-Step through what $100 might buy. Every number here is made up to show the shape, not RuleBuddy's real results.
+Step through what $100 might buy. Every number here is made up to show the shape, not anyone's real results.
 
 Figure: Hypothetical funnel for 100 dollars of ads: 20,000 people see it, 200 tap, 20 install, 2 pay, so the cost per paying user is 50 dollars.
 
-Now compare that $50 with what a customer is worth. Say RuleBuddy charged $3 a month and the average payer stayed 6 months. That's $18, minus a 15% store cut: about $15 LTV. Paying $50 to earn $15 loses $35 per customer. More budget would lose more money, faster.
+Now compare that $50 with what a customer is worth. Say Pantry Pal charged $3 a month and the average payer stayed 6 months. That's $18, minus a 15% store cut: about $15 LTV. Paying $50 to earn $15 loses $35 per customer. More budget would lose more money, faster.
 
 Figure: Two hypothetical cases. Losing: a customer costs 50 dollars and is worth 15. Healthy: a customer costs 14 dollars and is worth 42, three times the cost.
 
@@ -90,7 +90,7 @@ Nobody knows ahead of time which ad will work, not even pros. So run cheap exper
 
 2. One platform. Pick the one whose mindset fits (the table above).
 
-3. 3 to 5 creatives. Same audience, different hooks. A hook is the first line or first second that makes someone stop scrolling. AI tools now make it cheap to produce many variations, so the limit is good ideas, not production time. For example: "Stop arguing about the rules", "Learn any board game in 2 minutes", or a clip of a real game night.
+3. 3 to 5 creatives. Same audience, different hooks. A hook is the first line or first second that makes someone stop scrolling. AI tools now make it cheap to produce many variations, so the limit is good ideas, not production time. For example: "Never ask 'what's for dinner?' again", "A week of meals in 5 minutes", or a clip of a real Sunday plan.
 
 4. A small budget you're fine losing. For example $10 to $20 a day for a week (hypothetical). Don't touch it for the week.
 
@@ -130,13 +130,13 @@ You're hoping ads will tell you who the app is for. That's positioning work, and
 
 The app earns nothing and has no plan to.
 
-It's a family app. Those stay private: no marketing at all.
+It's a private app, built for your family or your own staff. Those need no marketing at all.
 
-A good order for our apps: free channels first, then a small ad test once free users show the app keeps people. Ads amplify what already works; they rarely create it.
+A good order for a small product: free channels first, then a small ad test once free users show the app keeps people. Ads amplify what already works; they rarely create it.
 
-# About that RuleBuddy Facebook ad
+# When a first ad flops
 
-We don't have its numbers, so this isn't a verdict. These are the usual reasons a first Facebook ad underwhelms; most hit several:
+Plenty of small businesses try one Facebook ad, see almost nothing come of it, and decide ads don't work. These are the usual reasons a first ad underwhelms; most flops hit several:
 
 1. It was a "boost" or aimed at clicks. Boosting a post usually optimises for likes and engagement, so Meta found people who like things, not people who sign up.
 
@@ -144,11 +144,11 @@ We don't have its numbers, so this isn't a verdict. These are the usual reasons 
 
 3. One creative. With nothing to compare, there was no way to learn which message works.
 
-4. Interruption, not intent. Nobody on Facebook was looking for a rules helper right then. The ad had one second to show the problem.
+4. Interruption, not intent. Nobody on Facebook was looking for a meal planner right then. The ad had one second to show the problem.
 
 5. No tracking after the tap. Without the pixel or an app event, nobody could see whether anyone signed up, so the result felt like nothing.
 
-None of this means Facebook ads can't work for RuleBuddy, only that the next try should be a proper test. Tell the team: "Run a one-week Meta test for RuleBuddy, $X a day, 3 to 5 creatives, optimise for sign-ups, and confirm tracking works before launch."
+None of this means Facebook ads can't work, only that the next try should be a proper test. Tell the team: "Run a one-week Meta test, $X a day, 3 to 5 creatives, optimise for sign-ups, and confirm tracking works before launch."
 
 Recap:
 

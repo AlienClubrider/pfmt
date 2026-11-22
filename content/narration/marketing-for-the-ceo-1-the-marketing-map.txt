@@ -4,11 +4,13 @@ Marketing looks like a hundred unrelated things: ads, SEO, posts, emails, review
 
 # What marketing is for
 
-You already know how to build a good app. Marketing is everything that happens so the right people find it, try it, keep using it, and tell others about it.
+If you run a small product or business, you already know how to make the thing people buy. Marketing is everything that happens so the right people find it, try it, keep using it, and tell others about it.
 
 That's the whole job. Ads, search, social posts and emails are just different ways of doing one of those four things. When something sounds confusing later, ask: "which of the four is this helping with?"
 
-"The right people" matters. A thousand random downloads that are deleted the same day are worth less than fifty board gamers who open RuleBuddy every game night.
+To keep things concrete, this series follows one example all the way through: Pantry Pal, a made-up meal-planning app for busy families. It isn't a real product, so swap in whatever you sell.
+
+"The right people" matters. A thousand random downloads that are deleted the same day are worth less than fifty parents who open Pantry Pal every Sunday to plan the week.
 
 In the shop: Picture your app as a small shop. The sign out front tells passers-by what you sell. Being on a busy street brings walk-ins for free. The shop window is the first look that makes people step inside. Flyers and billboards cost money and bring people who'd never have walked past. And regulars who tell their friends are the cheapest customers you'll ever get.
 
@@ -20,13 +22,13 @@ Figure: Each part of a shop matched to its marketing name: sign is positioning, 
 
 Every user goes through the same four steps. Marketers draw them as a funnel: wide at the top because many people see you, narrow at the bottom because few stay.
 
-1. Find. Someone sees RuleBuddy: a search result, a post, an ad, a friend's phone.
+1. Find. Someone sees Pantry Pal: a search result, a post, an ad, a friend's phone.
 
 2. Try. They visit the store page and install it, or open the website.
 
-3. Keep (and pay). They come back the next game night. If there's a paid tier, this is where they pay.
+3. Keep (and pay). They come back the next week to plan again. If there's a paid tier, this is where they pay.
 
-4. Tell others. They show it to their gaming group. Those friends enter at the top, for free.
+4. Tell others. They share the week's plan with a partner or a friend. Those friends enter at the top, for free.
 
 The share of people who move from one step to the next is a conversion rate. If 100 people see the store page and 20 install, that step converts at 20%. Keeping users over time is called retention.
 
@@ -34,7 +36,7 @@ Figure: A funnel with made-up numbers: 1,000 people see the app, 150 open the st
 
 Why it matters: The funnel tells you where to spend effort. If people install and then leave, more ads just buy more people who leave. Fix the leakiest step first. Often that's the store page or the first five minutes in the app, not "we need more traffic".
 
-Tell the team: "Show me our funnel for RuleBuddy, with the number at each step, and tell me which step leaks most."
+Tell the team: "Show me our funnel, with the number at each step, and tell me which step leaks most."
 
 # Positioning: the sign out front
 
@@ -44,23 +46,23 @@ A handy fill-in-the-blanks line: "For [who] who [problem], [app] [does what]."
 
 Vague sign.
 
-"RuleBuddy: an AI-powered board game companion app."
+"Pantry Pal: an AI-powered meal-planning platform."
 
 Who's it for? What does it do for me tonight? People walk past.
 
 Clear sign.
 
-"For board gamers who argue about the rules, RuleBuddy answers any rules question in seconds."
+"For busy parents who dread 'what's for dinner?', Pantry Pal plans the week's meals and the shopping list in five minutes."
 
-A gamer reads it and thinks "that's me".
+A tired parent reads it and thinks "that's me".
 
-(That second line is an example to show the idea, not RuleBuddy's agreed tagline. Picking the real one is one of the first jobs for your strategist.)
+(For your own product, picking the real line is one of the first marketing jobs, whoever ends up doing it.)
 
-Good positioning is narrow on purpose. "Everyone who plays games" is too wide to write an ad for. "Groups who play heavy board games and lose 10 minutes to rulebook lookups" is something an ad, a Reddit post and an app store screenshot can all speak to.
+Good positioning is narrow on purpose. "Everyone who eats" is too wide to write an ad for. "Parents of young kids who cook most nights and hate the 5 p.m. scramble" is something an ad, a Reddit post and an app store screenshot can all speak to.
 
-Watch out: The most common mistake is describing how it works ("AI-powered", "built with...") instead of what it does for the person. Users don't care about the engine. They care that the argument at the table ends.
+Watch out: The most common mistake is describing how it works ("AI-powered", "built with...") instead of what it does for the person. Users don't care about the engine. They care that dinner is sorted.
 
-Tell the team: "Give me three one-line promises for RuleBuddy, each aimed at a different kind of player, and say which you'd test first."
+Tell the team: "Give me three one-line promises for our product, each aimed at a different kind of customer, and say which you'd test first."
 
 # Three kinds of attention: owned, earned, paid
 
@@ -76,21 +78,21 @@ Figure: Three columns. Owned: website, store page, email list, social accounts; 
 
 The three feed each other. A good store page (owned) makes every ad (paid) convert better. Happy users leave reviews (earned) that make the store page better. An email list (owned) lets you ask happy users for a review.
 
-Not every app needs this: Marketing is for apps you want strangers to find. The family apps are private, so they get no marketing at all. RuleBuddy is the one this book is about.
+Not every app needs this: Marketing is for products you want strangers to find. An app you built for your own family, or a tool only your staff use, needs none of this. This series is about the kind you want the world to find.
 
 # A shop versus an app: what changes for software
 
-The shop is a good picture, but RuleBuddy isn't a bakery. Five differences change how you market software:
+The shop is a good picture, but an app isn't a bakery. Five differences change how you market software:
 
 The table contrasts a shop with an app: copies cost nothing, you can try before you pay, the whole world is the street, subscriptions make keeping users as important as getting them, and the product can spread itself.
 
-That last one has a name: product-led growth, growth where using the app is itself what brings in the next user. When a player shares a rules answer with the group chat, the product just did a bit of marketing.
+That last one has a name: product-led growth, growth where using the app is itself what brings in the next user. When a parent sends the week's shopping list to their partner, the product just did a bit of marketing.
 
-Tell the team: "Where in RuleBuddy could a happy user naturally share something with a friend, and what would make that one tap?"
+Tell the team: "Where in our product could a happy user naturally share something with a friend, and what would make that one tap?"
 
 # Your job as CEO
 
-You don't need to write ads or pick keywords. Your AI marketing team will. Your job is the same as on the dev side: set the goal, approve the big calls, and read the results.
+You don't need to write ads or pick keywords yourself. A marketer, an agency or a set of AI tools can do that. Your job is the same as everywhere else in the business: set the goal, approve the big calls, and read the results.
 
 Decide who it's for and approve the one-line promise.
 

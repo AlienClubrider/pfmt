@@ -2,38 +2,38 @@
   "marketing-for-the-ceo-1-the-marketing-map": {
     "src": "audio/marketing-for-the-ceo-1-the-marketing-map.opus",
     "fallback": "audio/marketing-for-the-ceo-1-the-marketing-map.m4a",
-    "seconds": 532.7,
-    "bytes": 2144464,
-    "fallbackBytes": 3341595,
+    "seconds": 555.1,
+    "bytes": 2233653,
+    "fallbackBytes": 3469701,
     "voice": "am_michael",
-    "hash": "6951d247207c1c4f"
+    "hash": "a531aaf5432da050"
   },
   "marketing-for-the-ceo-2-getting-found-without-paying": {
     "src": "audio/marketing-for-the-ceo-2-getting-found-without-paying.opus",
     "fallback": "audio/marketing-for-the-ceo-2-getting-found-without-paying.m4a",
-    "seconds": 828.1,
-    "bytes": 3365627,
-    "fallbackBytes": 5176077,
+    "seconds": 821.9,
+    "bytes": 3339792,
+    "fallbackBytes": 5149265,
     "voice": "am_michael",
-    "hash": "d11caa356520f447"
+    "hash": "a7ec6f2cddf754c9"
   },
   "marketing-for-the-ceo-3-paying-for-attention": {
     "src": "audio/marketing-for-the-ceo-3-paying-for-attention.opus",
     "fallback": "audio/marketing-for-the-ceo-3-paying-for-attention.m4a",
-    "seconds": 850.1,
-    "bytes": 3441264,
-    "fallbackBytes": 5327474,
+    "seconds": 854.2,
+    "bytes": 3460041,
+    "fallbackBytes": 5361760,
     "voice": "am_michael",
-    "hash": "3620ef0f47b462e7"
+    "hash": "7ca2b33d4a387c80"
   },
   "marketing-for-the-ceo-4-running-it-as-ceo": {
     "src": "audio/marketing-for-the-ceo-4-running-it-as-ceo.opus",
     "fallback": "audio/marketing-for-the-ceo-4-running-it-as-ceo.m4a",
-    "seconds": 690.7,
-    "bytes": 2786204,
-    "fallbackBytes": 4341489,
+    "seconds": 688.4,
+    "bytes": 2775546,
+    "fallbackBytes": 4320982,
     "voice": "am_michael",
-    "hash": "a7cee03fb5e0f2c9"
+    "hash": "eaa40f40c1cfa42a"
   },
   "threads-futures-queues-1-one-request-one-thread": {
     "src": "audio/threads-futures-queues-1-one-request-one-thread.opus",

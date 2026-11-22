@@ -10,6 +10,7 @@ partsTotal: 8
 tags: ["java", "concurrency", "spring-boot", "debugging"]
 readingMinutes: 8
 summary: "Chapter 4 showed how a CompletableFuture chain is meant to work. This chapter covers the six ways it usually goes wrong in a real service. Each one looks fine in code review and fine on your laptop. They show up only under load."
+status: review
 ---
 <aside class="callout analogy">
 <p class="callout-title">In the kitchen, on a bad night</p>
@@ -401,7 +402,7 @@ When your code hops to another thread, those values stay behind. Log lines from 
 <rect x="10" y="32" width="160" height="66" rx="6" class="s-thread" />
 <text x="90" y="52" class="t-mono t-small t-mid">http-nio-8080-exec-3</text>
 <text x="90" y="72" class="t-small t-mid">traceId=7f3a</text>
-<text x="90" y="89" class="t-small t-mid">user=bryson</text>
+<text x="90" y="89" class="t-small t-mid">user=ana</text>
 <path d="M174 65 H226" class="line" marker-end="url(#ah-5-4)" />
 <text x="200" y="56" class="t-small t-mid">hop</text>
 <rect x="230" y="32" width="160" height="66" rx="6" class="s-bad" />
@@ -412,13 +413,13 @@ When your code hops to another thread, those values stay behind. Log lines from 
 <rect x="10" y="147" width="160" height="66" rx="6" class="s-thread" />
 <text x="90" y="167" class="t-mono t-small t-mid">http-nio-8080-exec-3</text>
 <text x="90" y="187" class="t-small t-mid">traceId=7f3a</text>
-<text x="90" y="204" class="t-small t-mid">user=bryson</text>
+<text x="90" y="204" class="t-small t-mid">user=ana</text>
 <path d="M174 180 H226" class="line" marker-end="url(#ah-5-4)" />
 <text x="200" y="171" class="t-small t-mid">copy</text>
 <rect x="230" y="147" width="160" height="66" rx="6" class="s-work" />
 <text x="310" y="167" class="t-mono t-small t-mid">pricing-1</text>
 <text x="310" y="187" class="t-small t-mid">traceId=7f3a</text>
-<text x="310" y="204" class="t-small t-mid">user=bryson</text>
+<text x="310" y="204" class="t-small t-mid">user=ana</text>
 </svg>
 <figcaption><b>Figure 5.4</b> Thread-local values stay on the thread that set them. A decorator copies them onto the pool thread for the life of the task.</figcaption>
 </figure>
