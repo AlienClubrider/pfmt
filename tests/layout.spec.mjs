@@ -47,8 +47,9 @@ test('every step-through figure has one row of controls, on load and after clien
 });
 
 test('step-through figure numbers its notes and fits the current step', async ({ page }) => {
-  await page.goto('posts/marketing-for-the-ceo-1-the-marketing-map/', { waitUntil: 'networkidle' });
-  const fig = page.locator('#fig-1-2');
+  // a published post: a post still in review isn't in the public build these tests run against
+  await page.goto('posts/threads-futures-queues-1-one-request-one-thread/', { waitUntil: 'networkidle' });
+  const fig = page.locator('#fig-1-1');
   const svg = fig.locator('svg');
   const h1 = (await svg.boundingBox()).height;
   await fig.getByRole('button', { name: 'Next →' }).click();

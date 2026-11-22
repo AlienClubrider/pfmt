@@ -2,8 +2,8 @@
 // the lock-screen details, and the quiet install offers. Runs against the built site (npm run build).
 import { test, expect, devices } from '@playwright/test';
 
-const POST = 'posts/marketing-for-the-ceo-1-the-marketing-map/';
-const OTHER = 'posts/marketing-for-the-ceo-2-getting-found-without-paying/';
+const POST = 'posts/threads-futures-queues-1-one-request-one-thread/';
+const OTHER = 'posts/threads-futures-queues-2-pools-and-queues/';
 
 const controlled = (page) => page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 15000 });
 
@@ -77,11 +77,11 @@ test('lock screen gets title, series and part, the penny; place is remembered ac
     const m = navigator.mediaSession.metadata;
     return { title: m.title, artist: m.artist, album: m.album, art: m.artwork.map((a) => a.sizes) };
   });
-  expect(meta).toMatchObject({ artist: 'Penny for My Thoughts', album: 'Marketing for the CEO · Part 1 of 4', art: ['192x192', '512x512'] });
+  expect(meta).toMatchObject({ artist: 'Penny for My Thoughts', album: 'Threads, Futures and Queues · Part 1 of 8', art: ['192x192', '512x512'] });
 
   await page.waitForFunction(() => document.getElementById('pfmt-audio').readyState >= 1 && !document.getElementById('pfmt-audio').paused);
   await page.evaluate(() => { document.getElementById('pfmt-audio').currentTime = 120; });
-  await page.waitForFunction(() => JSON.parse(localStorage.getItem('pfmt-player-v1')).pos['marketing-for-the-ceo-1-the-marketing-map'] >= 120);
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('pfmt-player-v1')).pos['threads-futures-queues-1-one-request-one-thread'] >= 120);
   await page.evaluate(() => document.getElementById('pfmt-audio').pause());
   await page.reload();
   await expect(page.locator('button.listen[data-play]').first()).toHaveAttribute('aria-label', /^Resume/);
